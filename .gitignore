@@ -1,2 +1,10 @@
 /target
 **/*.rs.bk
+
+# For intellij idea
+.idea
+/target
+/out
+*.iml
+
+/tmp
