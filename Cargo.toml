@@ -1,7 +1,7 @@
 [package]
-name = "elastic-tunnel-rs"
+name = "estunnel"
 version = "1.0.0"
-authors = ["Wenxuan <wenxuangm@gmail.com>"]
+authors = ["Wenxuan Zhang <wenxuangm@gmail.com>"]
 description = "Tools for downloading data from elasticsearch cluster."
 repository = "https://github.com/wfxr/elastic-tunnel-rs"
 edition = "2018"

@@ -1,10 +1,10 @@
-extern crate elastic_tunnel_rs;
+extern crate estunnel;
 
 extern crate serde_derive;
 #[macro_use]
 extern crate serde_json;
 
-use elastic_tunnel_rs::ScrollResponse;
+use estunnel::ScrollResponse;
 
 use crossbeam::crossbeam_channel;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
@@ -141,7 +141,6 @@ fn main() -> Result<(), Box<std::error::Error>> {
 }
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "elastic-tunnel")]
 #[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
 struct Opt {
     #[structopt(short = "h", long = "host", default_value = "http://localhost:9200")]
