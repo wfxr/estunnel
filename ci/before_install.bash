@@ -16,4 +16,6 @@ export PROJECT_NAME
 # needed for i686 linux gnu target
 if [[ $TARGET == i686-unknown-linux-gnu ]]; then
     sudo apt install -y gcc-multilib
+elif [[ $TARGET == x86_64-unknown-linux-musl ]]; then
+    sudo apt install -y musl-tools
 fi
