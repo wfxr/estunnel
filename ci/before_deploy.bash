@@ -3,10 +3,6 @@
 
 set -ex
 
-build() {
-    cargo build --target "$TARGET" --release --verbose
-}
-
 pack() {
     local tempdir
     local out_dir
@@ -45,7 +41,6 @@ pack() {
 }
 
 main() {
-    build
     pack
 }
 
