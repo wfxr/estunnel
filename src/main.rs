@@ -10,7 +10,7 @@ use crossbeam::crossbeam_channel;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use reqwest::StatusCode;
 use std::fs::File;
-use std::io::{BufReader, Write};
+use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
@@ -125,13 +125,12 @@ fn main() -> Result<(), Box<std::error::Error>> {
     });
 
     let output = opt.output;
-    thread::spawn(move || {
-        let mut output: Box<Write> = match output {
-            Some(output) => Box::new(File::create(output).unwrap()),
-
+    let output_task = thread::spawn(move || {
+        let mut output = BufWriter::new(match output {
+            Some(output) => Box::new(File::create(output).unwrap()) as Box<Write>,
             None => Box::new(std::io::stdout()),
-        };
-        for res in rx {
+        });
+        for res in rx.iter() {
             for hit in res.hits.hits {
                 writeln!(&mut output, "{}", hit._source).unwrap();
             }
@@ -139,6 +138,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     });
 
     mpb.join_and_clear().unwrap();
+    output_task.join().unwrap();
     Ok(())
 }
 
