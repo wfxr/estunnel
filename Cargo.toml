@@ -3,7 +3,7 @@ name = "estunnel"
 version = "1.0.0"
 authors = ["Wenxuan Zhang <wenxuangm@gmail.com>"]
 description = "Tools for downloading data from elasticsearch cluster."
-repository = "https://github.com/wfxr/elastic-tunnel-rs"
+repository = "https://github.com/wfxr/estunnel"
 edition = "2018"
 
 [dependencies]
