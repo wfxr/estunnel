@@ -93,7 +93,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
             tx.send(Box::new(res)).expect("error sending result to channel");
 
             while !finished {
-                let mut res = reqwest::Client::new()
+                let mut res = client
                     .post(&format!("{}/_search/scroll", &host))
                     .json(&json!({
                         "scroll": scroll_ttl,
