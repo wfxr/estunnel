@@ -1,6 +1,13 @@
 language: rust
 services: docker
 cache: cargo
+env:
+  global:
+    # Default target on travis-ci.
+    # Used as conditional check in the install stage
+    - HOST=x86_64-unknown-linux-gnu
+    - PROJECT_NAME=estunnel
+
 matrix:
   # allow_failures:
   #   - rust: nightly
@@ -85,12 +92,6 @@ sudo: required
 
 before_install:
   - ci/before_install.bash
-
-env:
-  global:
-    # Default target on travis-ci.
-    # Used as conditional check in the install stage
-    - HOST=x86_64-unknown-linux-gnu
 
 install:
   # prevent target re-add error from rustup
