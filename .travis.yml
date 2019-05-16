@@ -10,9 +10,10 @@ matrix:
       rust: stable
       env: TARGET=x86_64-unknown-linux-gnu
     - os: linux
+      language: generic
       env:
         - TARGET=x86_64-unknown-linux-musl
-        - RUST_VERSION=stable
+        - DOCKER_RUST_VERSION=stable
     - os: osx
       rust: stable
       env: TARGET=x86_64-apple-darwin
@@ -38,7 +39,9 @@ matrix:
     # Nightly channel.
     - os: linux
       rust: nightly
-      env: TARGET=x86_64-unknown-linux-gnu
+      env:
+        - TARGET=x86_64-unknown-linux-gnu
+        - DEPLOY=false
     # Disabled to reduce total CI time
     # - os: linux
     #   rust: nightly
@@ -91,7 +94,7 @@ env:
 
 install:
   # prevent target re-add error from rustup
-  - if [[ $TRAVIS_OS_NAME = linux && $HOST != $TARGET ]]; then rustup target add $TARGET; fi
+  - if [[ $DOCKER_RUST_VERSION = "" && $TRAVIS_OS_NAME = linux && $HOST != $TARGET ]]; then rustup target add $TARGET; fi
 
 script:
   - ci/script.bash
@@ -121,9 +124,9 @@ deploy:
   on:
     # deploy only if we push a tag
     tags: true
-    # deploy only on stable channel that has TARGET env variable sets
-    condition: $TRAVIS_RUST_VERSION = stable && $TARGET != ""
+    condition: $DEPLOY != false && $TARGET != ""
 
 notifications:
   email:
-    on_success: never
+    on_success: change
+    on_failure: always
