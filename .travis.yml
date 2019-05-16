@@ -1,0 +1,127 @@
+language: rust
+cache: cargo
+matrix:
+  # allow_failures:
+  #   - rust: nightly
+  include:
+    # Stable channel.
+    - os: linux
+      rust: stable
+      env: TARGET=x86_64-unknown-linux-gnu
+    - os: linux
+      rust: stable
+      env: TARGET=x86_64-unknown-linux-musl
+    - os: osx
+      rust: stable
+      env: TARGET=x86_64-apple-darwin
+
+    # Beta channel.
+    # - os: linux
+      # rust: beta
+      # env: TARGET=x86_64-unknown-linux-gnu
+    # Disabled to reduce total CI time
+    # - os: linux
+    #   rust: beta
+    #   env: TARGET=x86_64-unknown-linux-musl
+    # - os: linux
+    #   rust: beta
+    #   env: TARGET=i686-unknown-linux-gnu
+    # - os: linux
+    #   rust: beta
+    #   env: TARGET=i686-unknown-linux-musl
+    # - os: osx
+    #   rust: beta
+    #   env: TARGET=x86_64-apple-darwin
+
+    # Nightly channel.
+    - os: linux
+      rust: nightly
+      env: TARGET=x86_64-unknown-linux-gnu
+    # Disabled to reduce total CI time
+    # - os: linux
+    #   rust: nightly
+    #   env: TARGET=x86_64-unknown-linux-musl
+    # - os: linux
+    #   rust: nightly
+    #   env: TARGET=i686-unknown-linux-gnu
+    # - os: linux
+    #   rust: nightly
+    #   env: TARGET=i686-unknown-linux-musl
+    # - os: osx
+    #   rust: nightly
+    #   env: TARGET=x86_64-apple-darwin
+
+    # Minimum Rust supported channel.
+    # - os: linux
+      # rust: 1.31.0
+      # env: TARGET=x86_64-unknown-linux-gnu
+    # - os: linux
+      # rust: 1.31.0
+      # env: TARGET=x86_64-unknown-linux-musl
+    # - os: linux
+      # rust: 1.31.0
+      # env: TARGET=i686-unknown-linux-gnu
+    # - os: linux
+      # rust: 1.31.0
+      # env: TARGET=i686-unknown-linux-musl
+    # - os: osx
+      # rust: 1.31.0
+      # env: TARGET=x86_64-apple-darwin
+
+    # Code formatting check
+    - os: linux
+      rust: nightly
+      # skip the global install step
+      install:
+        - cargo install --debug --force rustfmt-nightly
+      script: cargo fmt -- --check
+
+sudo: required
+
+before_install:
+  - ci/before_install.bash
+
+env:
+  global:
+    # Default target on travis-ci.
+    # Used as conditional check in the install stage
+    - HOST=x86_64-unknown-linux-gnu
+
+install:
+  # prevent target re-add error from rustup
+  - if [[ $TRAVIS_OS_NAME = linux && $HOST != $TARGET ]]; then rustup target add $TARGET; fi
+
+script:
+  - ci/script.bash
+
+before_deploy:
+  - bash ci/before_deploy.bash
+
+deploy:
+  provider: releases
+  # NOTE updating the `api_key.secure`
+  # - go to: https://github.com/settings/tokens/new
+  # - generate new token using `public_repo` scope
+  # - encrypt it using: `travis encrypt API_KEY_HERE`
+  # - paste the output below
+  api_key:
+    secure: "XNssOP5Sj61VUgYDq7YW6xfU4Yp7jtz6aez5J0XM7lLLkWevbT1BXM+bDZ/Y1LboslQnV+nzYe6siSesXXyLKXkcxnQ02uSwG5t0ZdQfP81BoSOX5OnmPdOehM6b5cSc9fqyjE16JkNuC7eB/a+D4V9jdjx3bVmL56UdtFYFB8bBpjHc6TbS+1Z4iGhmR1sTiA1kVBW62GcxcT7TAk1h+nBEHEOeCU3LwSDpA6Haed+LiGH53md1jNKMRxvdkybzGvOUUdZTDVPD37CM+wPbIhqi4XPQ91Bz3DLPh56IboXKzwHeSbEzFMZrAWfyxf1t65yD7GRQlb1l1dPDBh4KSQGnivRMKK2NFP6jeemG2SR8ybKxAVIWrTaUwdWcP2hNKf5PcZiKTmosbgTBM/eJE28rvcLc/P4wMY/8dlTToulhhKXNHSUmbLyjv06jfD8ZrsEMAs3/TuezEthKM8zjT1LEjPTTDDuyliblZBCDbkqvT1eqekJk9653Q7FCPCmJDPoyygjit/6vDwNjDzvHIadrjPFBhsQKz2NfpCOZIVMp/ybeMPM7QS69MPxuqx54OTLytKUteJXXzgiKcQMuymXmdhvJLgW+hBoN3Qm2UeTTO/RI6bUtHd75ijU5TgMSi2sRscD//7NEIABVfrbQoee15jK/TV8zyH/RUa9cK9w="
+  # for uploading multiple files
+  file_glob: true
+  # NOTE explanation on each env variable
+  # - PROJECT_NAME: name of the project, set on the `env.global` above
+  # - TRAVIS_TAG: tag name that the build is being deployed for, usually the version number
+  # - TARGET: target triple of the build
+  file:
+    - $PROJECT_NAME-$TRAVIS_TAG-$TARGET.*
+  # don't delete artifacts from previous stage
+  skip_cleanup: true
+  on:
+    # deploy only if we push a tag
+    tags: true
+    # deploy only on stable channel that has TARGET env variable sets
+    condition: $TRAVIS_RUST_VERSION = stable && $TARGET != ""
+
+notifications:
+  email:
+    on_success: never
