@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     let query = BufReader::new(File::open(opt.query)?);
     let query: serde_json::Value = serde_json::from_reader(query)?;
 
-    let (tx, rx) = crossbeam_channel::bounded(0);
+    let (tx, rx) = crossbeam_channel::unbounded();
 
     let mpb = Arc::new(MultiProgress::new());
     let mut children = vec![];
@@ -131,7 +131,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
         };
         for res in rx {
             for hit in res.hits.hits {
-                writeln!(&mut output, "{}", json!(hit._source)).unwrap();
+                writeln!(&mut output, "{}", hit._source).unwrap();
             }
         }
     });
