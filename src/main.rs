@@ -16,6 +16,8 @@ use std::sync::Arc;
 use std::thread;
 use structopt::StructOpt;
 
+const CHANNEL_CAPACITY: usize = 10000;
+
 fn main() -> Result<(), Box<std::error::Error>> {
     let opt = Opt::from_args();
     let host = opt.host;
@@ -27,7 +29,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     let query = BufReader::new(File::open(opt.query)?);
     let query: serde_json::Value = serde_json::from_reader(query)?;
 
-    let (tx, rx) = crossbeam_channel::unbounded();
+    let (tx, rx) = crossbeam_channel::bounded(CHANNEL_CAPACITY);
 
     let mpb = Arc::new(MultiProgress::new());
     let mut children = vec![];
@@ -88,7 +90,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
             let mut scroll_id = res._scroll_id.clone();
             let mut finished = res.hits.hits.is_empty();
-            tx.send(res).expect("error sending result to channel");
+            tx.send(Box::new(res)).expect("error sending result to channel");
 
             while !finished {
                 let mut res = reqwest::Client::new()
@@ -108,7 +110,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
                 pb.inc(res.hits.hits.len() as u64);
                 scroll_id = res._scroll_id.clone();
                 finished = res.hits.hits.is_empty();
-                tx.send(res).expect("error sending result to channel");
+                tx.send(Box::new(res)).expect("error sending result to channel");
             }
 
             pb.finish_with_message(&format!("Slice {} finished", slice_id))
