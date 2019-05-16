@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     let (tx, rx) = crossbeam_channel::bounded(CHANNEL_CAPACITY);
 
     let mpb = Arc::new(MultiProgress::new());
-    let mut children = vec![];
+    let mut producer_threads = vec![];
     for slice_id in 0..slice {
         let tx = tx.clone();
         let mut query = query.clone();
@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
         pb.set_style(style);
         pb.set_message(&format!("Slice {}", slice_id));
 
-        children.push(thread::spawn(move || {
+        producer_threads.push(thread::spawn(move || {
             let client = reqwest::Client::new();
             if slice > 1 {
                 let obj = query.as_object_mut().unwrap();
@@ -63,9 +63,8 @@ fn main() -> Result<(), Box<std::error::Error>> {
             }
 
             let mut params = vec![("scroll", "1m".to_owned())];
-            match batch {
-                Some(batch) => params.push(("size", batch.to_string())),
-                None => {}
+            if let Some(batch) = batch {
+                params.push(("size", batch.to_string()))
             }
             let mut res = client
                 .post(&format!("{}/{}/_search", &host, &index))
@@ -118,27 +117,27 @@ fn main() -> Result<(), Box<std::error::Error>> {
     }
 
     thread::spawn(|| {
-        for child in children {
-            child.join().expect("error joining");
+        for th in producer_threads {
+            th.join().expect("error joining");
         }
         drop(tx);
     });
 
     let output = opt.output;
-    let output_task = thread::spawn(move || {
+    let consumer_thread = thread::spawn(move || {
         let mut output = BufWriter::new(match output {
             Some(output) => Box::new(File::create(output).unwrap()) as Box<Write>,
             None => Box::new(std::io::stdout()),
         });
         for res in rx.iter() {
-            for hit in res.hits.hits {
+            for hit in &res.hits.hits {
                 writeln!(&mut output, "{}", hit._source).unwrap();
             }
         }
     });
 
     mpb.join_and_clear().unwrap();
-    output_task.join().unwrap();
+    consumer_thread.join().unwrap();
     Ok(())
 }
 
