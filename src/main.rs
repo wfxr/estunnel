@@ -63,9 +63,8 @@ fn main() -> Result<(), Box<std::error::Error>> {
             }
 
             let mut params = vec![("scroll", "1m".to_owned())];
-            match batch {
-                Some(batch) => params.push(("size", batch.to_string())),
-                None => {}
+            if let Some(batch) = batch {
+                params.push(("size", batch.to_string()))
             }
             let mut res = client
                 .post(&format!("{}/{}/_search", &host, &index))
