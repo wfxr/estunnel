@@ -11,7 +11,7 @@ pack() {
 
     tempdir=$(mktemp -d 2>/dev/null || mktemp -d -t tmp)
     out_dir=$(pwd)
-    package_name="$PROJECT_NAME-$TRAVIS_TAG-$TARGET"
+    package_name="$PROJECT_NAME-$TRAVIS_TAG-${TARGET//-unknown}"
     gcc_prefix=""
 
     # create a "staging" directory
@@ -35,7 +35,7 @@ pack() {
 
     # archiving
     pushd "$tempdir"
-    tar czf "$out_dir/$package_name.tar.gz" "$package_name"/*
+    tar czf "$out_dir/$package_name.tgz" "$package_name"/*
     popd
     rm -r "$tempdir"
 }
