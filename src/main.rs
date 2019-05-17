@@ -15,6 +15,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 use structopt::StructOpt;
+use std::cmp::{max, min};
 
 const CHANNEL_CAPACITY: usize = 10000;
 
@@ -84,7 +85,9 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
             let res: ScrollResponse = res.json().expect("error parsing response");
 
-            pb.set_length(res.hits.total as u64);
+            let total = res.hits.total as u64;
+            pb.set_length(total);
+            pb.set_draw_delta(max(1, min(10000, total / 1000)));
             pb.inc(res.hits.hits.len() as u64);
 
             let mut scroll_id = res._scroll_id.clone();
