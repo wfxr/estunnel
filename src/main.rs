@@ -8,7 +8,8 @@ use estunnel::ScrollResponse;
 
 use crossbeam::crossbeam_channel;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use reqwest::StatusCode;
+use reqwest::Response;
+use std::cmp::{max, min};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
@@ -41,12 +42,13 @@ fn main() -> Result<(), Box<std::error::Error>> {
         let scroll_ttl = scroll_ttl.clone();
 
         let mpb = mpb.clone();
-        let pb = mpb.add(ProgressBar::new_spinner());
+        let pb = mpb.add(ProgressBar::new(1));
         let style = ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+            .template("{prefix} [{elapsed_precise}] {bar:60.cyan/blue} {msg}")
             .progress_chars("##-");
         pb.set_style(style);
-        pb.set_message(&format!("Slice {}", slice_id));
+        pb.set_prefix(&format!("Slice-{}", slice_id));
+        pb.set_message("Starting...");
 
         producer_threads.push(thread::spawn(move || {
             let client = reqwest::Client::new();
@@ -66,33 +68,29 @@ fn main() -> Result<(), Box<std::error::Error>> {
             if let Some(batch) = batch {
                 params.push(("size", batch.to_string()))
             }
-            let mut res = client
+            let res = client
                 .post(&format!("{}/{}/_search", &host, &index))
                 .query(&params)
                 .json(&query)
                 .send()
                 .expect("error sending request");
 
-            if res.status() != 200 {
-                eprintln!(
-                    "error query es. status={}, content={}",
-                    res.status(),
-                    res.text().unwrap()
-                );
-                return;
-            }
+            let (docs, mut scroll_id, total) = parse_response(res).expect("error parsing response");
 
-            let res: ScrollResponse = res.json().expect("error parsing response");
+            let style = ProgressStyle::default_bar()
+                .template("{prefix} [{elapsed_precise}] {bar:60.cyan/blue} {msg} {pos:>7}/{len:7} (ETA {eta_precise})")
+                .progress_chars("##-");
+            pb.set_message("Running...");
+            pb.set_style(style);
+            pb.set_length(total);
+            pb.set_draw_delta(max(1, min(10000, total / 1000)));
+            pb.inc(docs.len() as u64);
 
-            pb.set_length(res.hits.total as u64);
-            pb.inc(res.hits.hits.len() as u64);
-
-            let mut scroll_id = res._scroll_id.clone();
-            let mut finished = res.hits.hits.is_empty();
-            tx.send(Box::new(res)).expect("error sending result to channel");
+            let mut finished = docs.is_empty();
+            tx.send(Box::new(docs)).expect("error sending result to channel");
 
             while !finished {
-                let mut res = client
+                let res = client
                     .post(&format!("{}/_search/scroll", &host))
                     .json(&json!({
                         "scroll": scroll_ttl,
@@ -101,18 +99,16 @@ fn main() -> Result<(), Box<std::error::Error>> {
                     .send()
                     .expect("error sending request");
 
-                if res.status() != StatusCode::OK {
-                    eprintln!("error query es: {:?}", res);
-                    return;
-                }
-                let res: ScrollResponse = res.json().expect("error parsing response");
-                pb.inc(res.hits.hits.len() as u64);
-                scroll_id = res._scroll_id.clone();
-                finished = res.hits.hits.is_empty();
-                tx.send(Box::new(res)).expect("error sending result to channel");
+                let (docs, new_scroll_id, total) = parse_response(res).expect("error parsing response");
+
+                scroll_id = new_scroll_id;
+                pb.set_length(total);
+                pb.inc(docs.len() as u64);
+                finished = docs.is_empty();
+                tx.send(Box::new(docs)).expect("error sending result to channel");
             }
 
-            pb.finish_with_message(&format!("Slice {} finished", slice_id))
+            pb.finish_with_message("Finished.")
         }));
     }
 
@@ -129,9 +125,9 @@ fn main() -> Result<(), Box<std::error::Error>> {
             Some(output) => Box::new(File::create(output).unwrap()) as Box<Write>,
             None => Box::new(std::io::stdout()),
         });
-        for res in rx.iter() {
-            for hit in &res.hits.hits {
-                writeln!(&mut output, "{}", hit._source).unwrap();
+        for docs in rx.iter() {
+            for doc in docs.iter() {
+                writeln!(&mut output, "{}", doc).unwrap();
             }
         }
     });
@@ -139,6 +135,18 @@ fn main() -> Result<(), Box<std::error::Error>> {
     mpb.join_and_clear().unwrap();
     consumer_thread.join().unwrap();
     Ok(())
+}
+
+fn parse_response(mut res: Response) -> Result<(Vec<String>, String, u64), Box<std::error::Error>> {
+    if res.status() != 200 {
+        return Err(format!("error query es. status={}, content={}", res.status(), res.text()?).into());
+    }
+    // serde_json has bad performance on reader. So we first read body into a string.
+    // See: https://github.com/serde-rs/json/issues/160
+    let res = res.text()?;
+    let res: ScrollResponse = serde_json::from_str(&res)?;
+    let docs = res.hits.hits.iter().map(|hit| hit._source.to_string()).collect();
+    Ok((docs, res._scroll_id, res.hits.total))
 }
 
 #[derive(StructOpt, Debug)]
