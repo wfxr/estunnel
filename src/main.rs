@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
         Some(user) => {
             let prompt = format!("Enter host password for user {}: ", user.clone());
             Some(rpassword::read_password_from_tty(Some(&prompt)).unwrap())
-        },
+        }
         None => None,
     };
     let user = user.unwrap_or("estunnel".to_owned());
