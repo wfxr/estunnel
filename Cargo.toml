@@ -1,6 +1,6 @@
 [package]
 name = "estunnel"
-version = "1.1.0"
+version = "1.1.1"
 authors = ["Wenxuan Zhang <wenxuangm@gmail.com>"]
 description = "Tools for downloading data from elasticsearch cluster."
 repository = "https://github.com/wfxr/estunnel"
