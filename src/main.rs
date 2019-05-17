@@ -26,6 +26,14 @@ fn main() -> Result<(), Box<std::error::Error>> {
     let slice = opt.slice;
     let batch: Option<u32> = opt.batch;
     let scroll_ttl = opt.scroll_ttl;
+    let user = opt.user;
+    let pass = match opt.pass {
+        true => {
+            let prompt = format!("Enter host password for user {}: ", user.clone());
+            Some(rpassword::read_password_from_tty(Some(&prompt)).unwrap())
+        },
+        false => None,
+    };
 
     let query = BufReader::new(File::open(opt.query)?);
     let query: serde_json::Value = serde_json::from_reader(query)?;
@@ -40,6 +48,8 @@ fn main() -> Result<(), Box<std::error::Error>> {
         let host = host.clone();
         let index = index.clone();
         let scroll_ttl = scroll_ttl.clone();
+        let user = user.clone();
+        let pass = pass.clone();
 
         let mpb = mpb.clone();
         let pb = mpb.add(ProgressBar::new(1));
@@ -70,6 +80,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
             }
             let res = client
                 .post(&format!("{}/{}/_search", &host, &index))
+                .basic_auth(user.clone(), pass.clone())
                 .query(&params)
                 .json(&query)
                 .send()
@@ -92,6 +103,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
             while !finished {
                 let res = client
                     .post(&format!("{}/_search/scroll", &host))
+                    .basic_auth(user.clone(), pass.clone())
                     .json(&json!({
                         "scroll": scroll_ttl,
                         "scroll_id": scroll_id,
@@ -154,6 +166,12 @@ fn parse_response(mut res: Response) -> Result<(Vec<String>, String, u64), Box<s
 struct Opt {
     #[structopt(short = "h", long = "host", default_value = "http://localhost:9200")]
     host: String,
+
+    #[structopt(short = "u", long = "user", default_value = "<anonymous>")]
+    user: String,
+
+    #[structopt(short = "p", long = "pass")]
+    pass: bool,
 
     #[structopt(short = "i", long = "index")]
     index: String,
