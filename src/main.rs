@@ -27,13 +27,14 @@ fn main() -> Result<(), Box<std::error::Error>> {
     let batch: Option<u32> = opt.batch;
     let scroll_ttl = opt.scroll_ttl;
     let user = opt.user;
-    let pass = match opt.pass {
-        true => {
+    let pass = match &user {
+        Some(user) => {
             let prompt = format!("Enter host password for user {}: ", user.clone());
             Some(rpassword::read_password_from_tty(Some(&prompt)).unwrap())
         },
-        false => None,
+        None => None,
     };
+    let user = user.unwrap_or("estunnel".to_owned());
 
     let query = BufReader::new(File::open(opt.query)?);
     let query: serde_json::Value = serde_json::from_reader(query)?;
@@ -167,11 +168,8 @@ struct Opt {
     #[structopt(short = "h", long = "host", default_value = "http://localhost:9200")]
     host: String,
 
-    #[structopt(short = "u", long = "user", default_value = "<anonymous>")]
-    user: String,
-
-    #[structopt(short = "p", long = "pass")]
-    pass: bool,
+    #[structopt(short = "u", long = "user")]
+    user: Option<String>,
 
     #[structopt(short = "i", long = "index")]
     index: String,
