@@ -9,13 +9,13 @@ use estunnel::ScrollResponse;
 use crossbeam::crossbeam_channel;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use reqwest::Response;
+use std::cmp::{max, min};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 use structopt::StructOpt;
-use std::cmp::{max, min};
 
 const CHANNEL_CAPACITY: usize = 10000;
 
