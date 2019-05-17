@@ -42,12 +42,13 @@ fn main() -> Result<(), Box<std::error::Error>> {
         let scroll_ttl = scroll_ttl.clone();
 
         let mpb = mpb.clone();
-        let pb = mpb.add(ProgressBar::new_spinner());
+        let pb = mpb.add(ProgressBar::new(1));
         let style = ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+            .template("{prefix} [{elapsed_precise}] {bar:60.cyan/blue} {msg}")
             .progress_chars("##-");
         pb.set_style(style);
-        pb.set_message(&format!("Slice {}", slice_id));
+        pb.set_prefix(&format!("Slice-{}", slice_id));
+        pb.set_message("Starting...");
 
         producer_threads.push(thread::spawn(move || {
             let client = reqwest::Client::new();
@@ -76,6 +77,11 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
             let (docs, mut scroll_id, total) = parse_response(res).expect("error parsing response");
 
+            let style = ProgressStyle::default_bar()
+                .template("{prefix} [{elapsed_precise}] {bar:60.cyan/blue} {msg} {pos:>7}/{len:7} (ETA {eta_precise})")
+                .progress_chars("##-");
+            pb.set_message("Running...");
+            pb.set_style(style);
             pb.set_length(total);
             pb.set_draw_delta(max(1, min(10000, total / 1000)));
             pb.inc(docs.len() as u64);
@@ -102,7 +108,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
                 tx.send(Box::new(docs)).expect("error sending result to channel");
             }
 
-            pb.finish_with_message(&format!("Slice {} finished", slice_id))
+            pb.finish_with_message("Finished.")
         }));
     }
 
@@ -120,7 +126,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
             None => Box::new(std::io::stdout()),
         });
         for docs in rx.iter() {
-            for doc in &(*docs) {
+            for doc in docs.iter() {
                 writeln!(&mut output, "{}", doc).unwrap();
             }
         }
