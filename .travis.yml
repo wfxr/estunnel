@@ -119,7 +119,7 @@ deploy:
   # - TRAVIS_TAG: tag name that the build is being deployed for, usually the version number
   # - TARGET: target triple of the build
   file:
-    - $PROJECT_NAME-$TRAVIS_TAG-$TARGET.*
+    - $PROJECT_NAME-$TRAVIS_TAG-*.*
   # don't delete artifacts from previous stage
   skip_cleanup: true
   on:
