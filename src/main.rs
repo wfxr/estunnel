@@ -55,10 +55,16 @@ fn main() -> Result<(), Box<std::error::Error>> {
         let mpb = mpb.clone();
         let pb = mpb.add(ProgressBar::new(1));
         let style = ProgressStyle::default_bar()
-            .template("{prefix} [{elapsed_precise}] {bar:60.cyan/blue} {msg}")
+            .template("{prefix} [{elapsed_precise}] {bar:50} {percent:>3}% {msg}")
             .progress_chars("##-");
         pb.set_style(style);
-        pb.set_prefix(&format!("Slice-{}", slice_id));
+        let slice_num_width = slice.to_string().len();
+        pb.set_prefix(&format!(
+            "[{:0width$}/{}]",
+            slice_id + 1,
+            slice,
+            width = slice_num_width
+        ));
         pb.set_message("Starting...");
 
         pool.execute(move || {
@@ -90,12 +96,12 @@ fn main() -> Result<(), Box<std::error::Error>> {
             let (docs, mut scroll_id, total) = parse_response(res).expect("error parsing response");
 
             let style = ProgressStyle::default_bar()
-                .template("{prefix} [{elapsed_precise}] {bar:60.cyan/blue} {msg} {pos:>7}/{len:7} (ETA {eta_precise})")
+                .template("{prefix:.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise} {msg:.yellow.bold}")
                 .progress_chars("##-");
             pb.set_message("Running...");
             pb.set_style(style);
             pb.set_length(total);
-            pb.set_draw_delta(max(1, min(10000, total / 1000)));
+            pb.set_draw_delta(max(1, min(10000, total / 100)));
             pb.inc(docs.len() as u64);
 
             let mut finished = docs.is_empty();
@@ -121,6 +127,10 @@ fn main() -> Result<(), Box<std::error::Error>> {
                 tx.send(Box::new(docs)).expect("error sending result to channel");
             }
 
+            let style = ProgressStyle::default_bar()
+                .template("{prefix:.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise} {msg:.green.bold}")
+                .progress_chars("##-");
+            pb.set_style(style);
             pb.finish_with_message("Finished. ")
         });
     }
