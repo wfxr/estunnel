@@ -1,14 +1,8 @@
-extern crate estunnel;
-
-extern crate serde_derive;
-#[macro_use]
-extern crate serde_json;
-
-use estunnel::ScrollResponse;
-
 use crossbeam::crossbeam_channel;
+use estunnel::ScrollResponse;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use reqwest::Response;
+use serde_json::json;
 use std::cmp::{max, min};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
