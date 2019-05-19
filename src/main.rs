@@ -55,7 +55,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
         let mpb = mpb.clone();
         let pb = mpb.add(ProgressBar::new(1));
         let style = ProgressStyle::default_bar()
-            .template("{prefix} [{elapsed_precise}] {bar:50} {percent:>3}% {msg}")
+            .template("{prefix:.bold} {elapsed_precise} {bar:50} {percent:>3}% {msg:.yellow.bold}")
             .progress_chars("##-");
         pb.set_style(style);
         let slice_num_width = slice.to_string().len();
@@ -131,7 +131,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
                 .template("{prefix:.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise} {msg:.green.bold}")
                 .progress_chars("##-");
             pb.set_style(style);
-            pb.finish_with_message("Finished. ")
+            pb.finish_with_message("Finished.")
         });
     }
 
