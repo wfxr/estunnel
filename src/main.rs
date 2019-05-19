@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     let (tx, rx) = crossbeam_channel::bounded(CHANNEL_CAPACITY);
 
     let mpb = Arc::new(MultiProgress::new());
-    let mut producer_threads = vec![];
+    let pool = threadpool::ThreadPool::new(slice as usize);
     for slice_id in 0..slice {
         let tx = tx.clone();
         let mut query = query.clone();
@@ -55,13 +55,19 @@ fn main() -> Result<(), Box<std::error::Error>> {
         let mpb = mpb.clone();
         let pb = mpb.add(ProgressBar::new(1));
         let style = ProgressStyle::default_bar()
-            .template("{prefix} [{elapsed_precise}] {bar:60.cyan/blue} {msg}")
+            .template("{prefix} [{elapsed_precise}] {bar:50} {percent:>3}% {msg}")
             .progress_chars("##-");
         pb.set_style(style);
-        pb.set_prefix(&format!("Slice-{}", slice_id));
+        let slice_num_width = slice.to_string().len();
+        pb.set_prefix(&format!(
+            "[{:0width$}/{}]",
+            slice_id + 1,
+            slice,
+            width = slice_num_width
+        ));
         pb.set_message("Starting...");
 
-        producer_threads.push(thread::spawn(move || {
+        pool.execute(move || {
             let client = reqwest::Client::new();
             if slice > 1 {
                 let obj = query.as_object_mut().unwrap();
@@ -90,12 +96,12 @@ fn main() -> Result<(), Box<std::error::Error>> {
             let (docs, mut scroll_id, total) = parse_response(res).expect("error parsing response");
 
             let style = ProgressStyle::default_bar()
-                .template("{prefix} [{elapsed_precise}] {bar:60.cyan/blue} {msg} {pos:>7}/{len:7} (ETA {eta_precise})")
+                .template("{prefix:.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise} {msg:.yellow.bold}")
                 .progress_chars("##-");
             pb.set_message("Running...");
             pb.set_style(style);
             pb.set_length(total);
-            pb.set_draw_delta(max(1, min(10000, total / 1000)));
+            pb.set_draw_delta(max(1, min(10000, total / 100)));
             pb.inc(docs.len() as u64);
 
             let mut finished = docs.is_empty();
@@ -121,19 +127,21 @@ fn main() -> Result<(), Box<std::error::Error>> {
                 tx.send(Box::new(docs)).expect("error sending result to channel");
             }
 
-            pb.finish_with_message("Finished.")
-        }));
+            let style = ProgressStyle::default_bar()
+                .template("{prefix:.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise} {msg:.green.bold}")
+                .progress_chars("##-");
+            pb.set_style(style);
+            pb.finish_with_message("Finished. ")
+        });
     }
 
-    thread::spawn(|| {
-        for th in producer_threads {
-            th.join().expect("error joining");
-        }
+    thread::spawn(move || {
+        pool.join();
         drop(tx);
     });
 
     let output = opt.output;
-    let consumer_thread = thread::spawn(move || {
+    let output_thread = thread::spawn(move || {
         let mut output = BufWriter::new(match output {
             Some(output) => Box::new(File::create(output).unwrap()) as Box<Write>,
             None => Box::new(std::io::stdout()),
@@ -145,8 +153,8 @@ fn main() -> Result<(), Box<std::error::Error>> {
         }
     });
 
-    mpb.join_and_clear().unwrap();
-    consumer_thread.join().unwrap();
+    mpb.join().unwrap();
+    output_thread.join().unwrap();
     Ok(())
 }
 
