@@ -5,6 +5,15 @@ authors = ["Wenxuan Zhang <wenxuangm@gmail.com>"]
 description = "Tools for downloading data from elasticsearch cluster."
 repository = "https://github.com/wfxr/estunnel"
 edition = "2018"
+readme = "README.md"
+license = "MIT"
+keywords = [
+    "es",
+    "elasticsearch",
+    "scroll",
+    "tool",
+    "download",
+]
 
 [dependencies]
 reqwest = "0"
