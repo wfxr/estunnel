@@ -9,7 +9,7 @@ pub enum Opt {
     #[structopt(name = "pull")]
     #[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
     Pull {
-        /// Host URL for ElasticSearch
+        /// ElasticSearch host url
         #[structopt(short = "h", long = "host", default_value = "http://localhost:9200")]
         host: String,
 
@@ -29,7 +29,7 @@ pub enum Opt {
         #[structopt(short = "s", long = "slice", default_value = "1")]
         slice: u32,
 
-        /// Scroll batch size. size in query will be used if null.
+        /// Scroll batch size. Size in query will be used if null.
         #[structopt(short = "b", long = "batch")]
         batch: Option<u32>,
 
