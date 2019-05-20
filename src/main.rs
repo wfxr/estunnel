@@ -13,9 +13,6 @@ use std::sync::Arc;
 use std::thread;
 use structopt::StructOpt;
 
-// TODO: Set it dynamically by slice
-const CHANNEL_CAPACITY: usize = 10000;
-
 fn main() -> Result<(), Box<std::error::Error>> {
     let opt = cli::Opt::from_args();
     let host = opt.host;
@@ -36,7 +33,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     let query = BufReader::new(File::open(opt.query)?);
     let query: serde_json::Value = serde_json::from_reader(query)?;
 
-    let (tx, rx) = crossbeam_channel::bounded(CHANNEL_CAPACITY);
+    let (tx, rx) = crossbeam_channel::bounded(slice as usize);
 
     let mpb = Arc::new(MultiProgress::new());
     let pool = threadpool::ThreadPool::new(slice as usize);
