@@ -1,20 +1,23 @@
+mod cli;
+mod elastic;
+
 use crossbeam::crossbeam_channel;
-use estunnel::ScrollResponse;
+use elastic::ScrollResponse;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use reqwest::Response;
 use serde_json::json;
 use std::cmp::{max, min};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 use structopt::StructOpt;
 
+// TODO: Set it dynamically by slice
 const CHANNEL_CAPACITY: usize = 10000;
 
 fn main() -> Result<(), Box<std::error::Error>> {
-    let opt = Opt::from_args();
+    let opt = cli::Opt::from_args();
     let host = opt.host;
     let index = opt.index;
     let slice = opt.slice;
@@ -162,32 +165,4 @@ fn parse_response(mut res: Response) -> Result<(Vec<String>, String, u64), Box<s
     let res: ScrollResponse = serde_json::from_str(&res)?;
     let docs = res.hits.hits.iter().map(|hit| hit._source.to_string()).collect();
     Ok((docs, res._scroll_id, res.hits.total))
-}
-
-#[derive(StructOpt, Debug)]
-#[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
-struct Opt {
-    #[structopt(short = "h", long = "host", default_value = "http://localhost:9200")]
-    host: String,
-
-    #[structopt(short = "u", long = "user")]
-    user: Option<String>,
-
-    #[structopt(short = "i", long = "index")]
-    index: String,
-
-    #[structopt(short = "q", long = "query")]
-    query: PathBuf,
-
-    #[structopt(short = "s", long = "slice", default_value = "1")]
-    slice: u32,
-
-    #[structopt(short = "b", long = "batch")]
-    batch: Option<u32>,
-
-    #[structopt(short = "o", long = "output")]
-    output: Option<PathBuf>,
-
-    #[structopt(long = "scroll-ttl", default_value = "1m")]
-    scroll_ttl: String,
 }

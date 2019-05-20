@@ -1,6 +1,5 @@
-#[macro_use]
-extern crate serde_derive;
-extern crate serde_json;
+use serde_derive::*;
+use serde_json;
 
 #[derive(Serialize, Deserialize)]
 pub struct ScrollResponse {
