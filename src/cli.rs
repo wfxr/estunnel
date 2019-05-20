@@ -1,30 +1,55 @@
 use std::path::PathBuf;
+use structopt::clap;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
 #[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
-pub struct Opt {
-    #[structopt(short = "h", long = "host", default_value = "http://localhost:9200")]
-    pub host: String,
+pub enum Opt {
+    /// Pull data from ElasticSearch
+    #[structopt(name = "pull")]
+    #[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
+    Pull {
+        /// Host URL for ElasticSearch
+        #[structopt(short = "h", long = "host", default_value = "http://localhost:9200")]
+        host: String,
 
-    #[structopt(short = "u", long = "user")]
-    pub user: Option<String>,
+        /// Username for http basic authorization
+        #[structopt(short = "u", long = "user")]
+        user: Option<String>,
 
-    #[structopt(short = "i", long = "index")]
-    pub index: String,
+        /// Target index name(or alias)
+        #[structopt(short = "i", long = "index")]
+        index: String,
 
-    #[structopt(short = "q", long = "query")]
-    pub query: PathBuf,
+        /// File path for query body
+        #[structopt(short = "q", long = "query")]
+        query: PathBuf,
 
-    #[structopt(short = "s", long = "slice", default_value = "1")]
-    pub slice: u32,
+        /// Scroll slice count
+        #[structopt(short = "s", long = "slice", default_value = "1")]
+        slice: u32,
 
-    #[structopt(short = "b", long = "batch")]
-    pub batch: Option<u32>,
+        /// Scroll batch size. size in query will be used if null.
+        #[structopt(short = "b", long = "batch")]
+        batch: Option<u32>,
 
-    #[structopt(short = "o", long = "output")]
-    pub output: Option<PathBuf>,
+        /// File path for output
+        #[structopt(short = "o", long = "output", default_value = "/dev/stdout")]
+        output: PathBuf,
 
-    #[structopt(long = "scroll-ttl", default_value = "1m")]
-    pub scroll_ttl: String,
+        /// Scroll session ttl
+        #[structopt(long = "ttl", default_value = "1m")]
+        ttl: String,
+    },
+    /// Generate shell completion file
+    #[structopt(name = "completion")]
+    #[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
+    Completion {
+        #[structopt(help = "Target shell name")]
+        shell: clap::Shell,
+
+        /// Completion file directory
+        #[structopt(short = "o", long = "output", default_value = "")]
+        output: PathBuf,
+    },
 }
