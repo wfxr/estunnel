@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 use structopt::clap;
-use structopt::StructOpt;
+
+pub use structopt::clap::Shell;
+pub use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
 #[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]

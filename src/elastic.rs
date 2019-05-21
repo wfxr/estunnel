@@ -1,3 +1,4 @@
+use crate::common::Result;
 use reqwest::Response;
 use serde_derive::*;
 use serde_json;
@@ -21,7 +22,7 @@ pub struct Hit {
     pub _source: serde_json::Value,
 }
 
-pub fn parse_response(mut res: Response) -> Result<(Vec<String>, String, u64), Box<std::error::Error>> {
+pub fn parse_response(mut res: Response) -> Result<(Vec<String>, String, u64)> {
     if res.status() != 200 {
         return Err(format!("error query es. status={}, content={}", res.status(), res.text()?).into());
     }
