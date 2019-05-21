@@ -1,4 +1,4 @@
-use crate::cli::{Opt, Shell, StructOpt};
+use crate::cli::{CompletionOpt, Opt, PullOpt, StructOpt};
 use crate::common::Result;
 use crate::elastic::ScrollResponse;
 use crossbeam::crossbeam_channel;
@@ -8,24 +8,26 @@ use serde_json::json;
 use std::cmp::{max, min};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 
-pub fn completion(shell: Shell, output: PathBuf) -> Result<()> {
-    Ok(Opt::clap().gen_completions(env!("CARGO_PKG_NAME"), shell, output))
+pub fn completion(opt: CompletionOpt) -> Result<()> {
+    let CompletionOpt { shell, output } = opt;
+    Opt::clap().gen_completions(env!("CARGO_PKG_NAME"), shell, output);
+    Ok(())
 }
 
-pub fn pull(
-    host: String,
-    user: Option<String>,
-    index: String,
-    query: PathBuf,
-    slice: u32,
-    batch: Option<u32>,
-    output: PathBuf,
-    ttl: String,
-) -> Result<()> {
+pub fn pull(opt: PullOpt) -> Result<()> {
+    let PullOpt {
+        host,
+        user,
+        index,
+        query,
+        slice,
+        batch,
+        output,
+        ttl,
+    } = opt;
     let pass = match &user {
         Some(user) => {
             let prompt = format!("Enter host password for user {}: ", user.clone());
@@ -33,7 +35,7 @@ pub fn pull(
         }
         None => None,
     };
-    let user = user.unwrap_or("estunnel".to_owned());
+    let user = user.unwrap_or_else(|| "estunnel".to_owned());
 
     let query = BufReader::new(File::open(query)?);
     let query: serde_json::Value = serde_json::from_reader(query)?;
