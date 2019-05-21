@@ -1,8 +1,9 @@
 use crate::cli::{Opt, Shell, StructOpt};
 use crate::common::Result;
-use crate::elastic::parse_response;
+use crate::elastic::ScrollResponse;
 use crossbeam::crossbeam_channel;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use reqwest::Response;
 use serde_json::json;
 use std::cmp::{max, min};
 use std::fs::File;
@@ -151,4 +152,16 @@ pub fn pull(
     mpb.join()?;
     output_thread.join().unwrap();
     Ok(())
+}
+
+fn parse_response(mut res: Response) -> Result<(Vec<String>, String, u64)> {
+    if res.status() != 200 {
+        return Err(format!("error query es. status={}, content={}", res.status(), res.text()?).into());
+    }
+    // serde_json has bad performance on reader. So we first read body into a string.
+    // See: https://github.com/serde-rs/json/issues/160
+    let res = res.text()?;
+    let res: ScrollResponse = serde_json::from_str(&res)?;
+    let docs = res.hits.hits.iter().map(|hit| hit._source.to_string()).collect();
+    Ok((docs, res._scroll_id, res.hits.total))
 }
