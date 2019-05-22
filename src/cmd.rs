@@ -4,7 +4,6 @@ use crate::elastic::parse_response;
 use crossbeam::crossbeam_channel;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use serde_json::json;
-use std::cmp::{max, min};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
@@ -99,7 +98,6 @@ pub fn pull(
             pb.set_message("Running...");
             pb.set_style(style);
             pb.set_length(total);
-            pb.set_draw_delta(max(1, min(10000, total / 100)));
             pb.inc(docs.len() as u64);
 
             let mut finished = docs.is_empty();
