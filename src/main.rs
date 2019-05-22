@@ -10,5 +10,6 @@ fn main() -> Result<()> {
     match Opt::from_args() {
         Opt::Completion(completion) => cmd::completion(completion),
         Opt::Pull(pull) => cmd::pull(pull),
+        Opt::Update => cmd::update(),
     }
 }

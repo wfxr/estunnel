@@ -13,6 +13,9 @@ pub enum Opt {
     /// Generate shell completion file
     #[structopt(name = "completion")]
     Completion(CompletionOpt),
+    /// Check for updates
+    #[structopt(name = "update")]
+    Update,
 }
 
 #[derive(StructOpt, Debug)]

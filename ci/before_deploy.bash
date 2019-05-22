@@ -11,7 +11,8 @@ pack() {
 
     tempdir=$(mktemp -d 2>/dev/null || mktemp -d -t tmp)
     out_dir=$(pwd)
-    package_name="$PROJECT_NAME-$TRAVIS_TAG-${TARGET//-unknown}"
+    # package_name="$PROJECT_NAME-$TRAVIS_TAG-${TARGET//-unknown}"
+    package_name="$PROJECT_NAME-$TRAVIS_TAG-$TARGET"
     gcc_prefix=""
 
     # create a "staging" directory
@@ -34,8 +35,8 @@ pack() {
     # cp target/"$TARGET"/release/build/"$PROJECT_NAME"-*/out/_"$PROJECT_NAME" "$tempdir/$package_name/autocomplete"
 
     # archiving
-    pushd "$tempdir"
-    tar czf "$out_dir/$package_name.tgz" "$package_name"/*
+    pushd "$tempdir/$package_name"
+    tar czf "$out_dir/$package_name.tar.gz" ./*
     popd
     rm -r "$tempdir"
 }

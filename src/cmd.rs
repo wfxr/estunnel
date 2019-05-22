@@ -3,6 +3,9 @@ use crate::common::Result;
 use crate::elastic::*;
 use crossbeam::crossbeam_channel;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use regex;
+use regex::Regex;
+use self_update;
 use serde_json::json;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
@@ -199,5 +202,32 @@ pub fn pull(opt: PullOpt) -> Result<()> {
         eprintln!("{}", err)
     }
 
+    Ok(())
+}
+
+pub fn update() -> Result<()> {
+    let target = self_update::get_target()?;
+    let repo = env!("CARGO_PKG_REPOSITORY");
+    let repo_caps = Regex::new(r#"github.com/(?P<owner>\w+)/(?P<name>\w+)$"#)
+        .unwrap()
+        .captures(repo)
+        .unwrap();
+    let repo_owner = repo_caps.name("owner").unwrap().as_str();
+    let repo_name = repo_caps.name("name").unwrap().as_str();
+
+    let status = self_update::backends::github::Update::configure()?
+        .repo_owner(repo_owner)
+        .repo_name(repo_name)
+        .target(&target)
+        .bin_name(env!("CARGO_PKG_NAME"))
+        .show_download_progress(true)
+        .current_version(self_update::cargo_crate_version!())
+        .build()?
+        .update()?;
+
+    match status.updated() {
+        true => println!("Upgrade to version {} successfully!", status.version()),
+        false => println!("The current version is up to date."),
+    }
     Ok(())
 }
