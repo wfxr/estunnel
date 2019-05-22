@@ -1,29 +1,32 @@
-use crate::cli::{Opt, Shell, StructOpt};
+use crate::cli::{CompletionOpt, Opt, PullOpt, StructOpt};
 use crate::common::Result;
-use crate::elastic::parse_response;
+use crate::elastic::ScrollResponse;
 use crossbeam::crossbeam_channel;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use reqwest::Response;
 use serde_json::json;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 
-pub fn completion(shell: Shell, output: PathBuf) -> Result<()> {
-    Ok(Opt::clap().gen_completions(env!("CARGO_PKG_NAME"), shell, output))
+pub fn completion(opt: CompletionOpt) -> Result<()> {
+    let CompletionOpt { shell, output } = opt;
+    Opt::clap().gen_completions(env!("CARGO_PKG_NAME"), shell, output);
+    Ok(())
 }
 
-pub fn pull(
-    host: String,
-    user: Option<String>,
-    index: String,
-    query: PathBuf,
-    slice: u32,
-    batch: Option<u32>,
-    output: PathBuf,
-    ttl: String,
-) -> Result<()> {
+pub fn pull(opt: PullOpt) -> Result<()> {
+    let PullOpt {
+        host,
+        user,
+        index,
+        query,
+        slice,
+        batch,
+        output,
+        ttl,
+    } = opt;
     let pass = match &user {
         Some(user) => {
             let prompt = format!("Enter host password for user {}: ", user.clone());
@@ -31,7 +34,7 @@ pub fn pull(
         }
         None => None,
     };
-    let user = user.unwrap_or("estunnel".to_owned());
+    let user = user.unwrap_or_else(|| "estunnel".to_owned());
 
     let query = BufReader::new(File::open(query)?);
     let query: serde_json::Value = serde_json::from_reader(query)?;
@@ -149,4 +152,16 @@ pub fn pull(
     mpb.join()?;
     output_thread.join().unwrap();
     Ok(())
+}
+
+fn parse_response(mut res: Response) -> Result<(Vec<String>, String, u64)> {
+    if res.status() != 200 {
+        return Err(format!("error query es. status={}, content={}", res.status(), res.text()?).into());
+    }
+    // serde_json has bad performance on reader. So we first read body into a string.
+    // See: https://github.com/serde-rs/json/issues/160
+    let res = res.text()?;
+    let res: ScrollResponse = serde_json::from_str(&res)?;
+    let docs = res.hits.hits.iter().map(|hit| hit._source.to_string()).collect();
+    Ok((docs, res._scroll_id, res.hits.total))
 }

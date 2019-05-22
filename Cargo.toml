@@ -2,7 +2,7 @@
 name = "estunnel"
 version = "1.3.1-alpha.0"
 authors = ["Wenxuan Zhang <wenxuangm@gmail.com>"]
-description = "Tools for downloading data from elasticsearch cluster."
+description = "Tool for downloading data from elasticsearch cluster."
 repository = "https://github.com/wfxr/estunnel"
 edition = "2018"
 readme = "README.md"
