@@ -338,7 +338,7 @@ dependencies = [
 
 [[package]]
 name = "estunnel"
-version = "1.6.1-alpha.0"
+version = "1.6.1"
 dependencies = [
  "crossbeam 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "indicatif 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
