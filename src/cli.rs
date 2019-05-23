@@ -52,9 +52,13 @@ pub struct PullOpt {
     #[structopt(short = "s", long = "slice", default_value = "1")]
     pub slice: u32,
 
-    /// Scroll batch size. Size in query will be used if null.
+    /// Scroll batch size (if null size in query body will be used)
     #[structopt(short = "b", long = "batch")]
     pub batch: Option<u32>,
+
+    /// Max entries to download
+    #[structopt(short = "l", long = "limit")]
+    pub limit: Option<u64>,
 
     /// File path for output
     #[structopt(short = "o", long = "output", default_value = "/dev/stdout")]

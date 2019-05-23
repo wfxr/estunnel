@@ -9,6 +9,7 @@ use self_update;
 use serde_json::json;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 
@@ -26,6 +27,7 @@ pub fn pull(opt: PullOpt) -> Result<()> {
         query,
         slice,
         batch,
+        limit,
         output,
         ttl,
     } = opt;
@@ -41,13 +43,26 @@ pub fn pull(opt: PullOpt) -> Result<()> {
     let query = BufReader::new(File::open(query)?);
     let query: serde_json::Value = serde_json::from_reader(query)?;
 
-    let (tx, rx) = crossbeam_channel::bounded(slice as usize);
+    let (res_tx, res_rx) = crossbeam_channel::bounded(slice as usize);
+    let (err_tx, err_rx) = crossbeam_channel::unbounded();
+    let task_finished = Arc::new(AtomicBool::new(false));
 
     let mpb = Arc::new(MultiProgress::new());
     let pool = threadpool::ThreadPool::new(slice as usize);
-    let (err_tx, err_rx) = crossbeam_channel::unbounded();
+
+    let pb = limit.map(|limit| {
+        let pb = mpb.add(ProgressBar::new(limit));
+        let style = ProgressStyle::default_bar()
+            .template("{prefix:.blue.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise} {msg:.yellow.bold}");
+        pb.set_prefix("Task:");
+        pb.set_message("Running...");
+        pb.set_style(style);
+        pb.set_length(limit);
+        pb.set_draw_delta(1000);
+        pb
+    });
     for slice_id in 0..slice {
-        let tx = tx.clone();
+        let res_tx = res_tx.clone();
         let err_tx = err_tx.clone();
         let mut query = query.clone();
         let host = host.clone();
@@ -71,6 +86,7 @@ pub fn pull(opt: PullOpt) -> Result<()> {
         ));
         pb.set_message("Starting...");
 
+        let task_finished = task_finished.clone();
         pool.execute(move || {
             let client = reqwest::Client::new();
             if slice > 1 {
@@ -118,8 +134,10 @@ pub fn pull(opt: PullOpt) -> Result<()> {
                     pb.set_length(total);
                     pb.inc(docs.len() as u64);
 
-                    let finished = docs.is_empty();
-                    tx.send(Box::new(docs)).expect("error sending result to channel");
+                    let finished = docs.is_empty() || task_finished.load(Ordering::Relaxed);
+                    if !finished {
+                        res_tx.send(Box::new(docs)).expect("error sending to channel");
+                    }
                     (finished, scroll_id)
                 }
                 Err(e) => {
@@ -155,8 +173,10 @@ pub fn pull(opt: PullOpt) -> Result<()> {
                         scroll_id = new_scroll_id;
                         pb.set_length(total);
                         pb.inc(docs.len() as u64);
-                        finished = docs.is_empty();
-                        tx.send(Box::new(docs)).expect("error sending to channel");
+                        finished = docs.is_empty() || task_finished.load(Ordering::Relaxed);
+                        if !finished {
+                            res_tx.send(Box::new(docs)).expect("error sending to channel");
+                        }
                     }
                     Err(e) => {
                         err_tx.send(format!("Error[{}]: {}", slice_id, e))
@@ -170,24 +190,43 @@ pub fn pull(opt: PullOpt) -> Result<()> {
                 .template("{prefix:.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise} {msg:.green.bold}")
                 .progress_chars("##-");
             pb.set_style(style);
-            pb.finish_with_message("Finished.");
+            pb.set_message("Finished.");
         });
     }
 
-    thread::spawn(move || {
-        pool.join();
-        drop(tx);
-        drop(err_tx);
-    });
+    {
+        thread::spawn(move || {
+            pool.join();
+            drop(res_tx);
+            drop(err_tx);
+        });
+    }
 
-    let output = output;
     let output_thread = thread::spawn(move || {
         let mut output = BufWriter::new(File::create(output)?);
-        for docs in rx.iter() {
+        let mut curr = 0u64;
+        for docs in res_rx.iter() {
             for doc in docs.iter() {
                 match writeln!(&mut output, "{}", doc) {
-                    Ok(_) => {}
+                    Ok(_) => {
+                        curr += 1;
+                        if let Some(pb) = &pb {
+                            pb.inc(1)
+                        }
+                    }
                     Err(e) => return Err(Box::new(e)),
+                };
+                if let Some(limit) = limit {
+                    if curr >= limit {
+                        task_finished.store(true, Ordering::Relaxed);
+                        if let Some(pb) = &pb {
+                            let style = ProgressStyle::default_bar()
+                                .template("{prefix:.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise} {msg:.green.bold}");
+                            pb.set_style(style);
+                            pb.finish_with_message("Finished.");
+                        }
+                        break;
+                    }
                 }
             }
         }
