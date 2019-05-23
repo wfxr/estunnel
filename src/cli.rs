@@ -9,17 +9,19 @@ pub use structopt::StructOpt;
 pub enum Opt {
     /// Pull data from ElasticSearch
     #[structopt(name = "pull")]
+    #[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
     Pull(PullOpt),
     /// Generate shell completion file
     #[structopt(name = "completion")]
+    #[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
     Completion(CompletionOpt),
     /// Check for updates
     #[structopt(name = "update")]
+    #[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
     Update,
 }
 
 #[derive(StructOpt, Debug)]
-#[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
 pub struct CompletionOpt {
     /// Target shell name
     pub shell: clap::Shell,
@@ -30,7 +32,6 @@ pub struct CompletionOpt {
 }
 
 #[derive(StructOpt, Debug)]
-#[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
 pub struct PullOpt {
     /// ElasticSearch host url
     #[structopt(short = "h", long = "host", default_value = "http://localhost:9200")]
