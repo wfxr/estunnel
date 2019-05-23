@@ -264,9 +264,10 @@ pub fn update() -> Result<()> {
         .build()?
         .update()?;
 
-    match status.updated() {
-        true => println!("Upgrade to version {} successfully!", status.version()),
-        false => println!("The current version is up to date."),
+    if status.updated() {
+        println!("Upgrade to version {} successfully!", status.version())
+    } else {
+        println!("The current version is up to date.")
     }
     Ok(())
 }
