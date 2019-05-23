@@ -36,7 +36,7 @@ pack() {
 
     # archiving
     pushd "$tempdir/$package_name"
-    tar czf "$out_dir/$package_name.tar.gz" ./*
+    tar czf "$out_dir/$package_name.tar.gz" -- *
     popd
     rm -r "$tempdir"
 }
