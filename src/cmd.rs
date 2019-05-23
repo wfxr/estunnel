@@ -48,19 +48,19 @@ pub fn pull(opt: PullOpt) -> Result<()> {
     let task_finished = Arc::new(AtomicBool::new(false));
 
     let mpb = Arc::new(MultiProgress::new());
-    let pool = threadpool::ThreadPool::new(slice as usize);
-
-    let pb = limit.map(|limit| {
+    let task_pb = limit.map(|limit| {
         let pb = mpb.add(ProgressBar::new(limit));
         let style = ProgressStyle::default_bar()
-            .template("{prefix:.blue.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise} {msg:.yellow.bold}");
+            .template("{prefix:.blue.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise}");
         pb.set_prefix("Task:");
-        pb.set_message("Running...");
         pb.set_style(style);
         pb.set_length(limit);
-        pb.set_draw_delta(1000);
+        pb.set_draw_delta(1_000_000);
+        pb.enable_steady_tick(100);
         pb
     });
+    let pool = threadpool::ThreadPool::new(slice as usize);
+
     for slice_id in 0..slice {
         let res_tx = res_tx.clone();
         let err_tx = err_tx.clone();
@@ -78,15 +78,15 @@ pub fn pull(opt: PullOpt) -> Result<()> {
             .progress_chars("##-");
         pb.set_style(style);
         let slice_num_width = slice.to_string().len();
-        pb.set_prefix(&format!(
-            "[{:0width$}/{}]",
-            slice_id + 1,
-            slice,
-            width = slice_num_width
-        ));
+        let job_id = slice_id + 1;
+        pb.set_prefix(&format!("[{:0width$}/{}]", job_id, slice, width = slice_num_width));
         pb.set_message("Starting...");
+        pb.set_draw_delta(1_000_000);
+        pb.enable_steady_tick(100);
 
         let task_finished = task_finished.clone();
+        // TODO: Why progress bar does not have some get method?
+        let mut curr = 0u64;
         pool.execute(move || {
             let client = reqwest::Client::new();
             if slice > 1 {
@@ -118,8 +118,9 @@ pub fn pull(opt: PullOpt) -> Result<()> {
             let res = match res {
                 Ok(res) => res,
                 Err(e) => {
-                    err_tx.send(format!("Fetch error[{}]: {}", slice_id, e))
+                    err_tx.send(format!("Fetch error[{}]: {}", job_id, e))
                         .expect("error sending to channel");
+                    pb.finish_and_clear();
                     return;
                 }
             };
@@ -131,18 +132,21 @@ pub fn pull(opt: PullOpt) -> Result<()> {
                         .progress_chars("##-");
                     pb.set_message("Running...");
                     pb.set_style(style);
-                    pb.set_length(total);
-                    pb.inc(docs.len() as u64);
 
                     let finished = docs.is_empty() || task_finished.load(Ordering::Relaxed);
                     if !finished {
+                        let len = docs.len() as u64;
                         res_tx.send(Box::new(docs)).expect("error sending to channel");
+                        pb.set_length(total);
+                        pb.inc(len);
+                        curr += len;
                     }
                     (finished, scroll_id)
                 }
                 Err(e) => {
-                    err_tx.send(format!("Parse error[{}]: {}", slice_id, e))
+                    err_tx.send(format!("Parse error[{}]: {}", job_id, e))
                         .expect("error sending to channel");
+                    pb.finish_and_clear();
                     return;
                 }
             };
@@ -163,24 +167,28 @@ pub fn pull(opt: PullOpt) -> Result<()> {
                 let res = match res {
                     Ok(res) => res,
                     Err(e) => {
-                        err_tx.send(format!("Error[{}]: {}", slice_id, e))
+                        err_tx.send(format!("Error[{}]: {}", job_id, e))
                             .expect("error sending to channel");
+                        pb.finish_and_clear();
                         return;
                     }
                 };
                 match parse_response(res) {
                     Ok((docs, new_scroll_id, total)) => {
-                        scroll_id = new_scroll_id;
-                        pb.set_length(total);
-                        pb.inc(docs.len() as u64);
                         finished = docs.is_empty() || task_finished.load(Ordering::Relaxed);
                         if !finished {
+                            let len = docs.len() as u64;
                             res_tx.send(Box::new(docs)).expect("error sending to channel");
+                            scroll_id = new_scroll_id;
+                            pb.set_length(total);
+                            pb.inc(len);
+                            curr += len;
                         }
                     }
                     Err(e) => {
-                        err_tx.send(format!("Error[{}]: {}", slice_id, e))
+                        err_tx.send(format!("Error[{}]: {}", job_id, e))
                             .expect("error sending to channel");
+                        pb.finish_and_clear();
                         return;
                     }
                 }
@@ -189,16 +197,9 @@ pub fn pull(opt: PullOpt) -> Result<()> {
             let style = ProgressStyle::default_bar()
                 .template("{prefix:.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise} {msg:.green.bold}")
                 .progress_chars("##-");
+            pb.set_length(curr);
             pb.set_style(style);
-            pb.set_message("Finished.");
-        });
-    }
-
-    {
-        thread::spawn(move || {
-            pool.join();
-            drop(res_tx);
-            drop(err_tx);
+            pb.finish_with_message("Finished.");
         });
     }
 
@@ -207,33 +208,47 @@ pub fn pull(opt: PullOpt) -> Result<()> {
         let mut curr = 0u64;
         for docs in res_rx.iter() {
             for doc in docs.iter() {
+                if let Some(limit) = limit {
+                    if curr >= limit {
+                        task_finished.store(true, Ordering::Relaxed);
+                        break;
+                    }
+                }
                 match writeln!(&mut output, "{}", doc) {
                     Ok(_) => {
                         curr += 1;
-                        if let Some(pb) = &pb {
+                        if let Some(pb) = &task_pb {
                             pb.inc(1)
                         }
                     }
                     Err(e) => return Err(Box::new(e)),
                 };
-                if let Some(limit) = limit {
-                    if curr >= limit {
-                        task_finished.store(true, Ordering::Relaxed);
-                        if let Some(pb) = &pb {
-                            let style = ProgressStyle::default_bar()
-                                .template("{prefix:.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise} {msg:.green.bold}");
-                            pb.set_style(style);
-                            pb.finish_with_message("Finished.");
-                        }
-                        break;
-                    }
+            }
+        }
+        if let Some(task_pb) = task_pb {
+            let style = ProgressStyle::default_bar()
+                .template("{prefix:.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise}");
+            task_pb.set_style(style);
+            if let Some(limit) = limit {
+                if curr >= limit {
+                    task_pb.finish_with_message("Finished.")
+                } else {
+                    // TODO: Anyway to join the pb without finishing it?
+                    task_pb.finish_and_clear();
                 }
             }
         }
         Ok(())
     });
 
-    mpb.join()?;
+    thread::spawn(move || {
+        pool.join();
+        drop(res_tx);
+        drop(err_tx);
+    });
+
+    mpb.join().expect("error joining progress threads");
+
     output_thread.join().unwrap()?;
 
     // print error if any
