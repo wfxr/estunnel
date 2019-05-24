@@ -112,7 +112,7 @@ pub fn pull(opt: PullOpt) -> Result<()> {
                 query = json!(obj);
             }
 
-            let params = vec![("scroll", "1m".to_owned()), ("size", batch.to_string())];
+            let params = vec![("scroll", scroll_ttl.to_string()), ("size", batch.to_string())];
             let res = request_elastic(
                 &client,
                 &format!("{}/{}/_search", &host, &index),
