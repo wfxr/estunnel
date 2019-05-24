@@ -7,6 +7,7 @@ use regex;
 use regex::Regex;
 use self_update;
 use serde_json::json;
+use std::cmp::{max, min};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -40,9 +41,17 @@ pub fn pull(opt: PullOpt) -> Result<()> {
     };
     let user = user.unwrap_or_else(|| "estunnel".to_owned());
 
-    let query = match query {
+    let query: serde_json::Value = match query {
         Some(query) => serde_json::from_reader(BufReader::new(File::open(query)?))?,
         None => json!({ "query": { "match_all": {} } }),
+    };
+    let batch = match batch {
+        Some(batch) => batch,
+        None => query["size"].as_u64().unwrap_or(1000),
+    };
+    let batch = match limit {
+        Some(limit) => min(batch, max(limit / slice, 1)),
+        None => batch,
     };
 
     let (res_tx, res_rx) = crossbeam_channel::bounded(slice as usize);
@@ -103,11 +112,7 @@ pub fn pull(opt: PullOpt) -> Result<()> {
                 query = json!(obj);
             }
 
-            let mut params = vec![("scroll", "1m".to_owned())];
-            if let Some(batch) = batch {
-                params.push(("size", batch.to_string()))
-            }
-
+            let params = vec![("scroll", "1m".to_owned()), ("size", batch.to_string())];
             let res = request_elastic(
                 &client,
                 &format!("{}/{}/_search", &host, &index),
