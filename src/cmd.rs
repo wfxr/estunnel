@@ -40,8 +40,10 @@ pub fn pull(opt: PullOpt) -> Result<()> {
     };
     let user = user.unwrap_or_else(|| "estunnel".to_owned());
 
-    let query = BufReader::new(File::open(query)?);
-    let query: serde_json::Value = serde_json::from_reader(query)?;
+    let query = match query {
+        Some(query) => serde_json::from_reader(BufReader::new(File::open(query)?))?,
+        None => json!({ "query": { "match_all": {} } }),
+    };
 
     let (res_tx, res_rx) = crossbeam_channel::bounded(slice as usize);
     let (err_tx, err_rx) = crossbeam_channel::unbounded();

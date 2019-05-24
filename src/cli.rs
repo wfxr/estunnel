@@ -47,7 +47,7 @@ pub struct PullOpt {
 
     /// File path for query body
     #[structopt(short = "q", long = "query")]
-    pub query: PathBuf,
+    pub query: Option<PathBuf>,
 
     /// Scroll slice count
     #[structopt(short = "s", long = "slice", default_value = "1")]
