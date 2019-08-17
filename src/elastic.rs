@@ -1,8 +1,13 @@
 use crate::common::Result;
 use reqwest::{Client, Response};
+use serde::de;
+use serde::de::MapAccess;
 use serde_derive::*;
 use serde_json;
 use serde_json::Value;
+use std::collections::HashMap;
+use std::fmt;
+use std::result;
 
 #[derive(Serialize, Deserialize)]
 pub struct ScrollResponse {
@@ -13,14 +18,52 @@ pub struct ScrollResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct Hits {
-    pub total:     u64,
+    #[serde(deserialize_with = "parse_total")]
+    pub total: u64,
     pub max_score: f64,
-    pub hits:      Vec<Hit>,
+    pub hits: Vec<Hit>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Hit {
     pub _source: serde_json::Value,
+}
+
+fn parse_total<'de, D>(deserializer: D) -> result::Result<u64, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    struct TotalVisitor;
+
+    impl<'de> de::Visitor<'de> for TotalVisitor {
+        type Value = u64;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("u64 or map contains u64 value")
+        }
+
+        fn visit_u64<E>(self, v: u64) -> result::Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(v)
+        }
+
+        fn visit_map<A>(self, access: A) -> result::Result<Self::Value, A::Error>
+        where
+            A: MapAccess<'de>,
+        {
+            let map: HashMap<&str, Value> =
+                serde::Deserialize::deserialize(de::value::MapAccessDeserializer::new(access))?;
+            let v = map
+                .get("value")
+                .ok_or_else(|| de::Error::missing_field("value"))?
+                .as_u64()
+                .expect("not a valid u64");
+            Ok(v)
+        }
+    }
+    deserializer.deserialize_any(TotalVisitor)
 }
 
 pub fn parse_response(mut res: Response) -> Result<(Vec<String>, String, u64)> {
