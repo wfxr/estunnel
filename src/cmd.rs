@@ -1,12 +1,12 @@
 use crate::cli::{CompletionOpt, Opt, PullOpt, StructOpt};
 use crate::common::Result;
 use crate::elastic::*;
-use crossbeam::crossbeam_channel;
+use crossbeam::{crossbeam_channel, Sender};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use regex;
 use regex::Regex;
 use self_update;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::cmp::{max, min};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
@@ -77,27 +77,11 @@ pub fn pull(opt: PullOpt) -> Result<()> {
 
         pool.execute(move || {
             let client = reqwest::Client::new();
-            if slice > 1 {
-                let obj = query.as_object_mut().unwrap();
-                obj.insert(
-                    "slice".into(),
-                    json!({
-                        "id": slice_id,
-                        "max": slice
-                    }),
-                );
-                query = json!(obj);
-            }
+            query = inject_query(slice, slice_id, query);
 
-            let params = vec![("scroll", scroll_ttl.to_string()), ("size", batch.to_string())];
-            let res = request_elastic(
-                &client,
-                &format!("{}/{}/_search", &host, &index),
-                &query,
-                &user,
-                &pass,
-                Some(params),
-            );
+            let url = format!("{}/{}/_search", &host, &index);
+            let params = Some(vec![("scroll", scroll_ttl.to_string()), ("size", batch.to_string())]);
+            let res = request_elastic(&client, &url, &query, &user, &pass, params);
 
             let res = match res {
                 Ok(res) => res,
@@ -119,10 +103,7 @@ pub fn pull(opt: PullOpt) -> Result<()> {
 
                     let finished = docs.is_empty() || task_finished.load(Ordering::Relaxed);
                     if !finished {
-                        let len = docs.len() as u64;
-                        res_tx.send(Box::new(docs)).expect("error sending to channel");
-                        pb.set_length(total);
-                        pb.inc(len);
+                        send_docs(&res_tx, &pb, docs, total);
                     }
                     (finished, scroll_id)
                 }
@@ -135,36 +116,25 @@ pub fn pull(opt: PullOpt) -> Result<()> {
             };
 
             while !finished {
-                let res = request_elastic(
-                    &client,
-                    &format!("{}/_search/scroll", &host),
-                    &json!({
-                        "scroll": scroll_ttl,
-                        "scroll_id": scroll_id,
-                    }),
-                    &user,
-                    &pass,
-                    None,
-                );
+                let url = format!("{}/_search/scroll", &host);
+                let query = json!({ "scroll": scroll_ttl, "scroll_id": scroll_id, });
+                let res = request_elastic(&client, &url, &query, &user, &pass, None);
 
                 let res = match res {
                     Ok(res) => res,
                     Err(e) => {
                         err_tx.send(format!("Error[{}]: {}", job_id, e))
                             .expect("error sending to channel");
-                        pb.finish_and_clear();
+                        pb.finish_at_current_pos();
                         return;
                     }
                 };
                 match parse_response(res) {
                     Ok((docs, new_scroll_id, total)) => {
                         finished = docs.is_empty() || task_finished.load(Ordering::Relaxed);
+                        scroll_id = new_scroll_id;
                         if !finished {
-                            let len = docs.len() as u64;
-                            res_tx.send(Box::new(docs)).expect("error sending to channel");
-                            scroll_id = new_scroll_id;
-                            pb.set_length(total);
-                            pb.inc(len);
+                            send_docs(&res_tx, &pb, docs, total);
                         }
                     }
                     Err(e) => {
@@ -175,13 +145,7 @@ pub fn pull(opt: PullOpt) -> Result<()> {
                     }
                 }
             }
-
-            let style = ProgressStyle::default_bar()
-                .template("{prefix:.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise} {msg:.green.bold}")
-                .progress_chars("##-");
-            pb.set_length(pb.position());  // adjust length
-            pb.set_style(style);
-            pb.finish_with_message("Finished.");
+            finish_pb(pb);
         });
     }
 
@@ -240,6 +204,28 @@ pub fn pull(opt: PullOpt) -> Result<()> {
     Ok(())
 }
 
+fn send_docs(res_tx: &Sender<Box<Vec<String>>>, pb: &ProgressBar, docs: Vec<String>, total: u64) {
+    let len = docs.len() as u64;
+    res_tx.send(Box::new(docs)).expect("error sending to channel");
+    pb.set_length(total);
+    pb.inc(len);
+}
+
+fn inject_query(slice: u64, slice_id: u64, mut query: Value) -> Value {
+    if slice > 1 {
+        let obj = query.as_object_mut().unwrap();
+        obj.insert(
+            "slice".into(),
+            json!({
+                "id": slice_id,
+                "max": slice
+            }),
+        );
+        return json!(obj);
+    }
+    return query;
+}
+
 fn create_pb_child(slice: &u64, mpb: &Arc<MultiProgress>, job_id: &u64) -> ProgressBar {
     let mpb = mpb.clone();
     let pb = mpb.add(ProgressBar::new(1));
@@ -269,6 +255,17 @@ fn create_pb(limit: Option<u64>) -> (Arc<MultiProgress>, Option<ProgressBar>) {
         pb
     });
     (mpb, task_pb)
+}
+
+fn finish_pb(pb: ProgressBar) {
+    let style = ProgressStyle::default_bar()
+        .template(
+            "{prefix:.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise} {msg:.green.bold}",
+        )
+        .progress_chars("##-");
+    pb.set_length(pb.position()); // adjust length
+    pb.set_style(style);
+    pb.finish_with_message("Finished.");
 }
 
 pub fn update() -> Result<()> {
