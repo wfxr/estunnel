@@ -1,7 +1,7 @@
 use crate::cli::{CompletionOpt, Opt, PullOpt, StructOpt};
 use crate::common::Result;
 use crate::elastic::*;
-use crossbeam::{crossbeam_channel, Sender};
+use crossbeam::{crossbeam_channel, Receiver, Sender};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use regex;
 use regex::Regex;
@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use std::cmp::{max, min};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -62,139 +63,132 @@ pub fn pull(opt: PullOpt) -> Result<()> {
     let pool = threadpool::ThreadPool::new(slice as usize);
 
     for slice_id in 0..slice {
-        let res_tx = res_tx.clone();
-        let err_tx = err_tx.clone();
-        let mut query = query.clone();
-        let host = host.clone();
-        let index = index.clone();
-        let scroll_ttl = ttl.clone();
-        let user = user.clone();
-        let pass = pass.clone();
-        let task_finished = task_finished.clone();
+        pool.execute({
+            let res_tx = res_tx.clone();
+            let err_tx = err_tx.clone();
+            let mut query = query.clone();
+            let host = host.clone();
+            let index = index.clone();
+            let scroll_ttl = ttl.clone();
+            let user = user.clone();
+            let pass = pass.clone();
+            let task_finished = task_finished.clone();
+            let job_id = slice_id + 1;
+            let pb = create_pb_child(&slice, &mpb, &job_id);
+            move || {
+                let client = reqwest::Client::new();
+                query = inject_query(slice, slice_id, query);
 
-        let job_id = slice_id + 1;
-        let pb = create_pb_child(&slice, &mpb, &job_id);
-
-        pool.execute(move || {
-            let client = reqwest::Client::new();
-            query = inject_query(slice, slice_id, query);
-
-            let url = format!("{}/{}/_search", &host, &index);
-            let params = Some(vec![("scroll", scroll_ttl.to_string()), ("size", batch.to_string())]);
-            let res = request_elastic(&client, &url, &query, &user, &pass, params);
-
-            let res = match res {
-                Ok(res) => res,
-                Err(e) => {
-                    err_tx.send(format!("Fetch error[{}]: {}", job_id, e))
-                        .expect("error sending to channel");
-                    pb.finish_at_current_pos();
-                    return;
-                }
-            };
-
-            let (mut finished, mut scroll_id) = match parse_response(res) {
-                Ok((docs, scroll_id, total)) => {
-                    let style = ProgressStyle::default_bar()
-                        .template("{prefix:.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise} {msg:.yellow.bold}")
-                        .progress_chars("##-");
-                    pb.set_message("Running...");
-                    pb.set_style(style);
-
-                    let finished = docs.is_empty() || task_finished.load(Ordering::Relaxed);
-                    if !finished {
-                        send_docs(&res_tx, &pb, docs, total);
-                    }
-                    (finished, scroll_id)
-                }
-                Err(e) => {
-                    err_tx.send(format!("Parse error[{}]: {}", job_id, e))
-                        .expect("error sending to channel");
-                    pb.finish_at_current_pos();
-                    return;
-                }
-            };
-
-            while !finished {
-                let url = format!("{}/_search/scroll", &host);
-                let query = json!({ "scroll": scroll_ttl, "scroll_id": scroll_id, });
-                let res = request_elastic(&client, &url, &query, &user, &pass, None);
+                let url = format!("{}/{}/_search", &host, &index);
+                let params = Some(vec![("scroll", scroll_ttl.to_string()), ("size", batch.to_string())]);
+                let res = request_elastic(&client, &url, &query, &user, &pass, params);
 
                 let res = match res {
                     Ok(res) => res,
                     Err(e) => {
-                        err_tx.send(format!("Error[{}]: {}", job_id, e))
+                        err_tx.send(format!("Fetch error[{}]: {}", job_id, e))
                             .expect("error sending to channel");
                         pb.finish_at_current_pos();
                         return;
                     }
                 };
-                match parse_response(res) {
-                    Ok((docs, new_scroll_id, total)) => {
-                        finished = docs.is_empty() || task_finished.load(Ordering::Relaxed);
-                        scroll_id = new_scroll_id;
+
+                let (mut finished, mut scroll_id) = match parse_response(res) {
+                    Ok((docs, scroll_id, total)) => {
+                        let style = ProgressStyle::default_bar()
+                            .template("{prefix:.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise} {msg:.yellow.bold}")
+                            .progress_chars("##-");
+                        pb.set_message("Running...");
+                        pb.set_style(style);
+
+                        let finished = docs.is_empty() || task_finished.load(Ordering::Relaxed);
                         if !finished {
                             send_docs(&res_tx, &pb, docs, total);
                         }
+                        (finished, scroll_id)
                     }
                     Err(e) => {
-                        err_tx.send(format!("Error[{}]: {}", job_id, e))
+                        err_tx.send(format!("Parse error[{}]: {}", job_id, e))
                             .expect("error sending to channel");
-                        pb.finish_and_clear();
+                        pb.finish_at_current_pos();
                         return;
                     }
+                };
+
+                while !finished {
+                    let url = format!("{}/_search/scroll", &host);
+                    let query = json!({ "scroll": scroll_ttl, "scroll_id": scroll_id, });
+                    let res = request_elastic(&client, &url, &query, &user, &pass, None);
+
+                    let res = match res {
+                        Ok(res) => res,
+                        Err(e) => {
+                            err_tx.send(format!("Error[{}]: {}", job_id, e))
+                                .expect("error sending to channel");
+                            pb.finish_at_current_pos();
+                            return;
+                        }
+                    };
+                    match parse_response(res) {
+                        Ok((docs, new_scroll_id, total)) => {
+                            finished = docs.is_empty() || task_finished.load(Ordering::Relaxed);
+                            scroll_id = new_scroll_id;
+                            if !finished {
+                                send_docs(&res_tx, &pb, docs, total);
+                            }
+                        }
+                        Err(e) => {
+                            err_tx.send(format!("Error[{}]: {}", job_id, e))
+                                .expect("error sending to channel");
+                            pb.finish_and_clear();
+                            return;
+                        }
+                    }
                 }
+                finish_pb(pb);
             }
-            finish_pb(pb);
         });
     }
 
-    let output_thread = thread::spawn(move || {
-        let mut output = BufWriter::new(File::create(output)?);
-        let mut curr = 0u64;
-        for docs in res_rx.iter() {
-            for doc in docs.iter() {
-                if let Some(limit) = limit {
-                    if curr >= limit {
-                        task_finished.store(true, Ordering::Relaxed);
-                        break;
-                    }
-                }
-                match writeln!(&mut output, "{}", doc) {
-                    Ok(_) => {
-                        curr += 1;
-                        if let Some(pb) = &task_pb {
-                            pb.inc(1)
-                        }
-                    }
-                    Err(e) => return Err(Box::new(e)),
-                };
-            }
-        }
-        if let Some(task_pb) = task_pb {
-            let style = ProgressStyle::default_bar()
-                .template("{prefix:.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise}");
-            task_pb.set_style(style);
-            if let Some(limit) = limit {
-                if curr >= limit {
-                    task_pb.finish_with_message("Finished.")
-                } else {
+    let output_thread = thread::spawn({
+        let err_tx = err_tx.clone();
+        move || match sink(limit, output, &res_rx, task_finished.clone(), &task_pb) {
+            Err(e) => {
+                task_finished.store(true, Ordering::Relaxed);
+                err_tx
+                    .send(format!("Write error: {}", e))
+                    .expect("error sending error to channel");
+                if let Some(task_pb) = task_pb {
                     task_pb.finish_at_current_pos();
                 }
             }
+            Ok(curr) => {
+                if let Some(task_pb) = task_pb {
+                    let style = ProgressStyle::default_bar().template(
+                        "{prefix:.bold} {elapsed_precise} {bar:50} {percent:>3}% {pos}/{len} ETA {eta_precise}",
+                    );
+                    task_pb.set_style(style);
+                    if let Some(limit) = limit {
+                        if curr >= limit {
+                            task_pb.finish_with_message("Finished.")
+                        } else {
+                            task_pb.finish_at_current_pos();
+                        }
+                    }
+                }
+            }
         }
-        Ok(())
     });
 
     thread::spawn(move || {
         pool.join();
         drop(res_tx);
-        drop(err_tx);
     });
 
     mpb.join().expect("error joining progress threads");
 
-    output_thread.join().unwrap()?;
+    output_thread.join().unwrap();
+    drop(err_tx);
 
     // print error if any
     for err in err_rx {
@@ -204,9 +198,43 @@ pub fn pull(opt: PullOpt) -> Result<()> {
     Ok(())
 }
 
-fn send_docs(res_tx: &Sender<Box<Vec<String>>>, pb: &ProgressBar, docs: Vec<String>, total: u64) {
+fn sink(
+    limit: Option<u64>,
+    output: PathBuf,
+    res_rx: &Receiver<Box<Vec<String>>>,
+    task_finished: Arc<AtomicBool>,
+    task_pb: &Option<ProgressBar>,
+) -> Result<u64> {
+    let mut output = BufWriter::new(File::create(output)?);
+    let mut curr = 0u64;
+    for docs in res_rx.iter() {
+        for doc in docs.iter() {
+            if let Some(limit) = limit {
+                if curr >= limit {
+                    task_finished.store(true, Ordering::Relaxed);
+                    return Ok(curr);
+                }
+            }
+            match writeln!(&mut output, "{}", doc) {
+                Ok(_) => {
+                    curr += 1;
+                    if let Some(pb) = &task_pb {
+                        pb.inc(1)
+                    }
+                }
+                Err(e) => {
+                    task_finished.store(true, Ordering::Relaxed);
+                    return Err(Box::new(e));
+                }
+            };
+        }
+    }
+    Ok(curr)
+}
+
+fn send_docs(tx: &Sender<Box<Vec<String>>>, pb: &ProgressBar, docs: Vec<String>, total: u64) {
     let len = docs.len() as u64;
-    res_tx.send(Box::new(docs)).expect("error sending to channel");
+    tx.send(Box::new(docs)).expect("error sending to channel");
     pb.set_length(total);
     pb.inc(len);
 }
