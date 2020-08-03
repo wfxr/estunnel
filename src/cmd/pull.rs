@@ -1,11 +1,8 @@
-use crate::cli::{CompletionOpt, Opt, PullOpt, StructOpt};
+use crate::cli::PullOpt;
 use crate::common::Result;
 use crate::elastic::*;
 use crossbeam::{crossbeam_channel, Receiver, Sender};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use regex;
-use regex::Regex;
-use self_update;
 use serde_json::{json, Value};
 use std::cmp::{max, min};
 use std::fs::File;
@@ -14,12 +11,6 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
-
-pub fn completion(opt: CompletionOpt) -> Result<()> {
-    let CompletionOpt { shell, output } = opt;
-    Opt::clap().gen_completions(env!("CARGO_PKG_NAME"), shell, output);
-    Ok(())
-}
 
 pub fn pull(opt: PullOpt) -> Result<()> {
     let PullOpt {
@@ -294,32 +285,4 @@ fn finish_pb(pb: ProgressBar) {
     pb.set_length(pb.position()); // adjust length
     pb.set_style(style);
     pb.finish_with_message("Finished.");
-}
-
-pub fn update() -> Result<()> {
-    let target = self_update::get_target()?;
-    let repo = env!("CARGO_PKG_REPOSITORY");
-    let repo_caps = Regex::new(r#"github.com/(?P<owner>\w+)/(?P<name>\w+)$"#)
-        .unwrap()
-        .captures(repo)
-        .unwrap();
-    let repo_owner = repo_caps.name("owner").unwrap().as_str();
-    let repo_name = repo_caps.name("name").unwrap().as_str();
-
-    let status = self_update::backends::github::Update::configure()?
-        .repo_owner(repo_owner)
-        .repo_name(repo_name)
-        .target(&target)
-        .bin_name(env!("CARGO_PKG_NAME"))
-        .show_download_progress(true)
-        .current_version(self_update::cargo_crate_version!())
-        .build()?
-        .update()?;
-
-    if status.updated() {
-        println!("Upgrade to version {} successfully!", status.version())
-    } else {
-        println!("The current version is up to date.")
-    }
-    Ok(())
 }

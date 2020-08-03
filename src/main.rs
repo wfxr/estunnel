@@ -8,8 +8,8 @@ use common::*;
 
 fn main() -> Result<()> {
     match Opt::from_args() {
-        Opt::Completion(completion) => cmd::completion(completion),
-        Opt::Pull(pull) => cmd::pull(pull),
-        Opt::Update => cmd::update(),
+        Opt::Completion(completion) => cmd::completion::completion(completion),
+        Opt::Pull(pull) => cmd::pull::pull(pull),
+        Opt::Update => cmd::update::update(),
     }
 }
