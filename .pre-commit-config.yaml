@@ -16,3 +16,23 @@ repos:
   - id: fmt
   - id: cargo-check
   - id: clippy
+- repo: local
+  hooks:
+  - id: cargo-fmt
+    name: cargo fmt
+    pass_filenames: false
+    always_run: true
+    language: system
+    entry: cargo fmt
+  - id: cargo-check
+    name: cargo check
+    pass_filenames: false
+    always_run: true
+    language: system
+    entry: cargo check
+  - id: cargo-clippy
+    name: cargo clippy
+    pass_filenames: false
+    language: system
+    always_run: true
+    entry: cargo clippy

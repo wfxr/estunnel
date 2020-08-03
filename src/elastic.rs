@@ -1,13 +1,13 @@
 use crate::common::Result;
 use reqwest::{Client, Response};
-use serde::de;
-use serde::de::MapAccess;
+use serde::de::{self, MapAccess};
 use serde_derive::*;
-use serde_json;
-use serde_json::Value;
+use serde_json::{self, value::RawValue, Value};
 use std::collections::HashMap;
 use std::fmt;
 use std::result;
+
+pub type Source = Box<RawValue>;
 
 #[derive(Serialize, Deserialize)]
 pub struct ScrollResponse {
@@ -26,7 +26,7 @@ pub struct Hits {
 
 #[derive(Serialize, Deserialize)]
 pub struct Hit {
-    pub _source: serde_json::Value,
+    pub _source: Source,
 }
 
 fn parse_total<'de, D>(deserializer: D) -> result::Result<u64, D::Error>
@@ -66,12 +66,12 @@ where
     deserializer.deserialize_any(TotalVisitor)
 }
 
-pub fn parse_response(mut res: Response) -> Result<(Vec<String>, String, u64)> {
+pub fn parse_response(mut res: Response) -> Result<(Vec<Box<RawValue>>, String, u64)> {
     let res = res.text()?;
     // serde_json has bad performance on reader. So we first read body into a string.
     // See: https://github.com/serde-rs/json/issues/160
     let res: ScrollResponse = serde_json::from_str(&res)?;
-    let docs = res.hits.hits.iter().map(|hit| hit._source.to_string()).collect();
+    let docs = res.hits.hits.into_iter().map(|hit| hit._source).collect();
     Ok((docs, res._scroll_id, res.hits.total))
 }
 

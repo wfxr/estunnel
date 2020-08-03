@@ -3,6 +3,7 @@ use crate::common::Result;
 use crate::elastic::*;
 use crossbeam::{crossbeam_channel, Receiver, Sender};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use serde::export::fmt::Display;
 use serde_json::{json, Value};
 use std::cmp::{max, min};
 use std::fs::File;
@@ -189,10 +190,10 @@ pub fn pull(opt: PullOpt) -> Result<()> {
     Ok(())
 }
 
-fn sink(
+fn sink<T: Display + ?Sized>(
     limit: Option<u64>,
     output: PathBuf,
-    res_rx: &Receiver<Box<Vec<String>>>,
+    res_rx: &Receiver<Box<Vec<Box<T>>>>,
     task_finished: Arc<AtomicBool>,
     task_pb: &Option<ProgressBar>,
 ) -> Result<u64> {
@@ -223,7 +224,7 @@ fn sink(
     Ok(curr)
 }
 
-fn send_docs(tx: &Sender<Box<Vec<String>>>, pb: &ProgressBar, docs: Vec<String>, total: u64) {
+fn send_docs<T>(tx: &Sender<Box<Vec<T>>>, pb: &ProgressBar, docs: Vec<T>, total: u64) {
     let len = docs.len() as u64;
     tx.send(Box::new(docs)).expect("error sending to channel");
     pb.set_length(total);
