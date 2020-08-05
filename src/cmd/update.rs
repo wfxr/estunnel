@@ -2,7 +2,7 @@ use crate::common::Result;
 use regex::Regex;
 
 pub fn update() -> Result<()> {
-    let target = self_update::get_target()?;
+    let target = self_update::get_target();
     let repo = env!("CARGO_PKG_REPOSITORY");
     let repo_caps = Regex::new(r#"github.com/(?P<owner>\w+)/(?P<name>\w+)$"#)
         .unwrap()
@@ -11,7 +11,7 @@ pub fn update() -> Result<()> {
     let repo_owner = repo_caps.name("owner").unwrap().as_str();
     let repo_name = repo_caps.name("name").unwrap().as_str();
 
-    let status = self_update::backends::github::Update::configure()?
+    let status = self_update::backends::github::Update::configure()
         .repo_owner(repo_owner)
         .repo_name(repo_name)
         .target(&target)

@@ -26,5 +26,5 @@ structopt = { version = "0.2", default-features = true }
 rpassword = "3"
 threadpool = "1"
 num_cpus = "1"
-self_update = "0.5"
+self_update = "0"
 regex = "1"
