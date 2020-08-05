@@ -240,10 +240,10 @@ dependencies = [
 
 [[package]]
 name = "estunnel"
-version = "1.8.1-alpha.0"
+version = "1.8.1"
 dependencies = [
  "crossbeam",
- "indicatif 0.15.0",
+ "indicatif",
  "num_cpus",
  "regex",
  "reqwest",
@@ -508,18 +508,6 @@ name = "indicatif"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8572bccfb0665e70b7faf44ee28841b8e0823450cd4ad562a76b5a3c4bf48487"
-dependencies = [
- "console",
- "lazy_static",
- "number_prefix",
- "regex",
-]
-
-[[package]]
-name = "indicatif"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7baab56125e25686df467fe470785512329883aab42696d661247aca2a2896e4"
 dependencies = [
  "console",
  "lazy_static",
@@ -1038,7 +1026,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ad4f32cc38aac660a9a872b5553677d59f984139f3316f642989d8232be3e5c"
 dependencies = [
  "hyper-old-types",
- "indicatif 0.13.0",
+ "indicatif",
  "log",
  "quick-xml",
  "regex",
