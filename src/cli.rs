@@ -22,10 +22,6 @@ pub enum Opt {
 pub struct CompletionOpt {
     /// Target shell name
     pub shell: clap::Shell,
-
-    /// Completion file directory
-    #[structopt(short = "o", long = "output", default_value = "")]
-    pub output: PathBuf,
 }
 
 #[derive(StructOpt, Debug)]
