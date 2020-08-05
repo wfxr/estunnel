@@ -68,7 +68,7 @@ pub fn pull(opt: PullOpt) -> Result<()> {
             let job_id = slice_id + 1;
             let pb = create_pb_child(&slice, &mpb, &job_id);
             move || {
-                let client = reqwest::Client::new();
+                let client = reqwest::blocking::Client::new();
                 query = inject_query(slice, slice_id, query);
 
                 let url = format!("{}/{}/_search", &host, &index);

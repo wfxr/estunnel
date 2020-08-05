@@ -1,5 +1,5 @@
 use crate::common::Result;
-use reqwest::{Client, Response};
+use reqwest::blocking::{Client, Response};
 use serde::de::{self, MapAccess};
 use serde_derive::*;
 use serde_json::{self, value::RawValue, Value};
@@ -66,11 +66,10 @@ where
     deserializer.deserialize_any(TotalVisitor)
 }
 
-pub fn parse_response(mut res: Response) -> Result<(Vec<Box<RawValue>>, String, u64)> {
-    let res = res.text()?;
-    // serde_json has bad performance on reader. So we first read body into a string.
+pub fn parse_response(res: Response) -> Result<(Vec<Box<RawValue>>, String, u64)> {
+    // read body into a string firstly to improve performance.
     // See: https://github.com/serde-rs/json/issues/160
-    let res: ScrollResponse = serde_json::from_str(&res)?;
+    let res: ScrollResponse = serde_json::from_str(&res.text()?)?;
     let docs = res.hits.hits.into_iter().map(|hit| hit._source).collect();
     Ok((docs, res._scroll_id, res.hits.total))
 }
