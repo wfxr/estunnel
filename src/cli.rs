@@ -1,23 +1,20 @@
 use std::path::PathBuf;
 use structopt::clap;
 
-pub use structopt::clap::Shell;
+pub use structopt::clap::{AppSettings, Shell};
 pub use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
-#[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
+#[structopt(global_settings(&[AppSettings::ColoredHelp]))]
 pub enum Opt {
     /// Pull data from ElasticSearch
     #[structopt(name = "pull")]
-    #[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
     Pull(PullOpt),
     /// Generate shell completion file
     #[structopt(name = "completion")]
-    #[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
     Completion(CompletionOpt),
     /// Check for updates
     #[structopt(name = "update")]
-    #[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
     Update,
 }
 
