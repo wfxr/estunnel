@@ -240,7 +240,7 @@ dependencies = [
 
 [[package]]
 name = "estunnel"
-version = "1.8.2"
+version = "1.8.3-alpha.0"
 dependencies = [
  "crossbeam",
  "indicatif",
