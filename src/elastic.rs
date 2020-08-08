@@ -19,9 +19,8 @@ pub struct ScrollResponse {
 #[derive(Serialize, Deserialize)]
 pub struct Hits {
     #[serde(deserialize_with = "parse_total")]
-    pub total:     u64,
-    pub max_score: f64,
-    pub hits:      Vec<Hit>,
+    pub total: u64,
+    pub hits:  Vec<Hit>,
 }
 
 #[derive(Serialize, Deserialize)]
