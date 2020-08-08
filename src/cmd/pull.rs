@@ -25,14 +25,7 @@ pub fn pull(opt: PullOpt) -> Result<()> {
         output,
         ttl,
     } = opt;
-    let pass = match &user {
-        Some(user) => {
-            let prompt = format!("Enter host password for user {}: ", user.clone());
-            Some(rpassword::read_password_from_tty(Some(&prompt)).unwrap())
-        }
-        None => None,
-    };
-    let user = user.unwrap_or_else(|| "estunnel".to_owned());
+    let (user, pass) = userpass(user);
 
     let query: serde_json::Value = match query {
         Some(query) => serde_json::from_reader(BufReader::new(File::open(query)?))?,
@@ -286,4 +279,22 @@ fn finish_pb(pb: ProgressBar) {
     pb.set_length(pb.position()); // adjust length
     pb.set_style(style);
     pb.finish_with_message("Finished.");
+}
+
+fn userpass(auth: Option<String>) -> (String, Option<String>) {
+    return match auth {
+        Some(auth) => {
+            let id = auth.find(':');
+            if let Some(id) = id {
+                let user = &auth[0..id];
+                let pass = &auth[id + 1..];
+                (user.to_string(), Some(pass.to_string()))
+            } else {
+                let prompt = format!("Enter host password for user {}: ", auth.clone());
+                let pass = rpassword::read_password_from_tty(Some(&prompt)).unwrap();
+                (auth, Some(pass))
+            }
+        }
+        None => ("estunnel".to_string(), None),
+    };
 }
