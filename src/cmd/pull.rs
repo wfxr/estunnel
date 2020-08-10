@@ -65,8 +65,8 @@ pub fn pull(opt: PullOpt) -> Result<()> {
                 query = inject_query(slice, slice_id, query);
 
                 let url = format!("{}/{}/_search", &host, &index);
-                let params = Some(vec![("scroll", scroll_ttl.to_string()), ("size", batch.to_string())]);
-                let res = request_elastic(&client, &url, &query, &user, &pass, params);
+                let params = vec![("scroll", scroll_ttl.to_string()), ("size", batch.to_string())].into();
+                let res = request_elastic(&client, &url, &query, &user, &pass, &params);
 
                 let res = match res {
                     Ok(res) => res,
@@ -103,7 +103,7 @@ pub fn pull(opt: PullOpt) -> Result<()> {
                 while !finished {
                     let url = format!("{}/_search/scroll", &host);
                     let query = json!({ "scroll": scroll_ttl, "scroll_id": scroll_id, });
-                    let res = request_elastic(&client, &url, &query, &user, &pass, None);
+                    let res = request_elastic(&client, &url, &query, &user, &pass, &None);
 
                     let res = match res {
                         Ok(res) => res,

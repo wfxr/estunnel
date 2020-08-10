@@ -79,12 +79,12 @@ pub fn request_elastic(
     query: &Value,
     user: &str,
     pass: &Option<String>,
-    params: Option<Vec<(&str, String)>>,
+    params: &Option<Vec<(&str, String)>>,
 ) -> Result<Response> {
     let res = client.post(url).basic_auth(user, pass.clone()).json(query);
 
     let res = match params {
-        Some(params) => res.query(&params),
+        Some(params) => res.query(params),
         _ => res,
     };
 
