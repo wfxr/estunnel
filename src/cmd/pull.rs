@@ -209,7 +209,10 @@ fn sink<T: Display + ?Sized>(
                 }
                 Err(e) => {
                     task_finished.store(true, Ordering::Relaxed);
-                    return Err(Box::new(e));
+                    // https://github.com/rust-lang/rust/issues/46016
+                    // should just silently exit in this case to avoid broken pipe error
+                    return Ok(curr);
+                    // return Err(Box::new(e));
                 }
             };
         }
