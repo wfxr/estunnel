@@ -15,6 +15,10 @@ keywords = [
     "download",
 ]
 
+[profile.release]
+lto = true
+codegen-units = 1
+
 [dependencies]
 reqwest = { version = "0.10", features = ["blocking", "json"] }
 serde = "1.0"

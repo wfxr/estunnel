@@ -13,3 +13,5 @@ else
     fi
     cargo build --target "$TARGET" --release
 fi
+
+cargo install cargo-strip && cargo strip
