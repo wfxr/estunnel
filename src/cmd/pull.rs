@@ -186,7 +186,7 @@ pub fn pull(opt: PullOpt) -> Result<()> {
 fn sink<T: Display + ?Sized>(
     limit: Option<u64>,
     output: PathBuf,
-    res_rx: &Receiver<Box<Vec<Box<T>>>>,
+    res_rx: &Receiver<Vec<Box<T>>>,
     task_finished: Arc<AtomicBool>,
     task_pb: &Option<ProgressBar>,
 ) -> Result<u64> {
@@ -220,9 +220,9 @@ fn sink<T: Display + ?Sized>(
     Ok(curr)
 }
 
-fn send_docs<T>(tx: &Sender<Box<Vec<T>>>, pb: &ProgressBar, docs: Vec<T>, total: u64) {
+fn send_docs<T>(tx: &Sender<Vec<T>>, pb: &ProgressBar, docs: Vec<T>, total: u64) {
     let len = docs.len() as u64;
-    tx.send(Box::new(docs)).expect("error sending to channel");
+    tx.send(docs).expect("error sending to channel");
     pb.set_length(total);
     pb.inc(len);
 }
@@ -239,7 +239,7 @@ fn inject_query(slice: u64, slice_id: u64, mut query: Value) -> Value {
         );
         return json!(obj);
     }
-    return query;
+    query
 }
 
 fn create_pb_child(slice: &u64, mpb: &Arc<MultiProgress>, job_id: &u64) -> ProgressBar {
@@ -285,7 +285,7 @@ fn finish_pb(pb: ProgressBar) {
 }
 
 fn userpass(auth: Option<String>) -> (String, Option<String>) {
-    return match auth {
+    match auth {
         Some(auth) => {
             let id = auth.find(':');
             if let Some(id) = id {
@@ -293,11 +293,11 @@ fn userpass(auth: Option<String>) -> (String, Option<String>) {
                 let pass = &auth[id + 1..];
                 (user.to_string(), Some(pass.to_string()))
             } else {
-                let prompt = format!("Enter host password for user {}: ", auth.clone());
+                let prompt = format!("Enter host password for user {}: ", auth);
                 let pass = rpassword::read_password_from_tty(Some(&prompt)).unwrap();
                 (auth, Some(pass))
             }
         }
         None => ("estunnel".to_string(), None),
-    };
+    }
 }
